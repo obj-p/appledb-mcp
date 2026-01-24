@@ -46,10 +46,6 @@ async def app_lifespan(server: FastMCP):
 mcp = FastMCP("appledb", lifespan=app_lifespan)
 
 # Import tools to register them with the MCP server
-from appledb_mcp.tools import process, execution  # noqa: F401
-
-
-# Import tools to register them with the MCP server
 # This must be done after mcp instance is created
 from .tools import process, execution  # noqa: E402, F401
 

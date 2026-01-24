@@ -1,215 +1,199 @@
-# Phase 2 Test Results
+# Phase 3: Execution Control - Test Results
 
-**Date**: 2026-01-24
-**Branch**: `feature/process-management`
-**Phase**: Process Management Tools
+**Date**: January 24, 2026
+**Branch**: `feature/execution-control`
+**Status**: ✅ All tests passing (37/37)
 
-## Summary
+## Test Summary
 
-✅ **All tests passed successfully**
+### Total Tests: 37
+- **Phase 1 (Foundation)**: 0 tests (infrastructure only)
+- **Phase 2 (Process Management)**: 13 tests
+- **Phase 3 (Execution Control)**: 16 tests
+- **Helper Methods**: 8 tests
 
-- **Unit Tests**: 13/13 passed (0.34s)
-- **Integration Tests**: 5/5 passed
-- **Test Coverage**: 100% of process management tools
+### Test Execution
 
-## Test Breakdown
+```bash
+$ source venv/bin/activate && python -m pytest tests/ -v
 
-### Unit Tests (pytest)
-
-**Command**: `pytest tests/test_tools.py -v`
-
-```
 ============================= test session starts ==============================
 platform darwin -- Python 3.14.0, pytest-9.0.2, pluggy-1.6.0
-collected 13 items
+rootdir: /Users/obj-p/Projects/appledb-mcp
+configfile: pyproject.toml
+plugins: anyio-4.12.1, asyncio-1.3.0
+asyncio: mode=Mode.AUTO, debug=False
+collected 37 items
 
-tests/test_tools.py::TestAttachProcess::test_attach_by_pid_success PASSED [  7%]
-tests/test_tools.py::TestAttachProcess::test_attach_by_name_success PASSED [ 15%]
-tests/test_tools.py::TestAttachProcess::test_attach_no_pid_or_name PASSED [ 23%]
-tests/test_tools.py::TestAttachProcess::test_attach_both_pid_and_name PASSED [ 30%]
-tests/test_tools.py::TestAttachProcess::test_attach_already_attached PASSED [ 38%]
-tests/test_tools.py::TestLaunchApp::test_launch_app_success PASSED       [ 46%]
-tests/test_tools.py::TestLaunchApp::test_launch_app_with_args PASSED     [ 53%]
-tests/test_tools.py::TestLaunchApp::test_launch_app_with_env PASSED      [ 61%]
-tests/test_tools.py::TestLaunchApp::test_launch_app_no_stop_at_entry PASSED [ 69%]
-tests/test_tools.py::TestLaunchApp::test_launch_app_already_attached PASSED [ 76%]
-tests/test_tools.py::TestDetach::test_detach_success PASSED              [ 84%]
-tests/test_tools.py::TestDetach::test_detach_with_kill PASSED            [ 92%]
+tests/test_debugger_helpers.py::TestGetFrameLocation::test_get_frame_location_with_valid_line_entry PASSED [  2%]
+tests/test_debugger_helpers.py::TestGetFrameLocation::test_get_frame_location_with_invalid_frame PASSED [  5%]
+tests/test_debugger_helpers.py::TestGetFrameLocation::test_get_frame_location_without_line_entry PASSED [  8%]
+tests/test_debugger_helpers.py::TestGetFrameLocation::test_get_frame_location_with_unknown_function PASSED [ 10%]
+tests/test_debugger_helpers.py::TestGetThread::test_get_thread_by_id PASSED [ 13%]
+tests/test_debugger_helpers.py::TestGetThread::test_get_thread_by_invalid_id PASSED [ 16%]
+tests/test_debugger_helpers.py::TestGetThread::test_get_thread_selected PASSED [ 18%]
+tests/test_debugger_helpers.py::TestGetThread::test_get_thread_no_valid_selected PASSED [ 21%]
+tests/test_execution.py::TestContinue::test_continue_success PASSED      [ 24%]
+tests/test_execution.py::TestContinue::test_continue_not_stopped PASSED  [ 27%]
+tests/test_execution.py::TestContinue::test_continue_not_attached PASSED [ 29%]
+tests/test_execution.py::TestPause::test_pause_success PASSED            [ 32%]
+tests/test_execution.py::TestPause::test_pause_not_running PASSED        [ 35%]
+tests/test_execution.py::TestPause::test_pause_not_attached PASSED       [ 37%]
+tests/test_execution.py::TestStepOver::test_step_over_success PASSED     [ 40%]
+tests/test_execution.py::TestStepOver::test_step_over_with_thread_id PASSED [ 43%]
+tests/test_execution.py::TestStepOver::test_step_over_not_stopped PASSED [ 45%]
+tests/test_execution.py::TestStepOver::test_step_over_invalid_thread PASSED [ 48%]
+tests/test_execution.py::TestStepInto::test_step_into_success PASSED     [ 51%]
+tests/test_execution.py::TestStepInto::test_step_into_with_thread_id PASSED [ 54%]
+tests/test_execution.py::TestStepInto::test_step_into_not_stopped PASSED [ 56%]
+tests/test_execution.py::TestStepOut::test_step_out_success PASSED       [ 59%]
+tests/test_execution.py::TestStepOut::test_step_out_with_thread_id PASSED [ 62%]
+tests/test_execution.py::TestStepOut::test_step_out_not_stopped PASSED   [ 64%]
+tests/test_tools.py::TestAttachProcess::test_attach_by_pid_success PASSED [ 67%]
+tests/test_tools.py::TestAttachProcess::test_attach_by_name_success PASSED [ 70%]
+tests/test_tools.py::TestAttachProcess::test_attach_no_pid_or_name PASSED [ 72%]
+tests/test_tools.py::TestAttachProcess::test_attach_both_pid_and_name PASSED [ 75%]
+tests/test_tools.py::TestAttachProcess::test_attach_already_attached PASSED [ 78%]
+tests/test_tools.py::TestLaunchApp::test_launch_app_success PASSED       [ 81%]
+tests/test_tools.py::TestLaunchApp::test_launch_app_with_args PASSED     [ 83%]
+tests/test_tools.py::TestLaunchApp::test_launch_app_with_env PASSED      [ 86%]
+tests/test_tools.py::TestLaunchApp::test_launch_app_no_stop_at_entry PASSED [ 89%]
+tests/test_tools.py::TestLaunchApp::test_launch_app_already_attached PASSED [ 91%]
+tests/test_tools.py::TestDetach::test_detach_success PASSED              [ 94%]
+tests/test_tools.py::TestDetach::test_detach_with_kill PASSED            [ 97%]
 tests/test_tools.py::TestDetach::test_detach_not_attached PASSED         [100%]
 
-============================== 13 passed in 0.34s ==============================
+============================== 37 passed in 0.39s ==============================
 ```
 
-### Integration Tests
+## Phase 3 Implementation Details
 
-**Command**: `python3 test_integration.py`
+### New Tools (5)
+1. `lldb_continue` - Continue execution of paused process
+2. `lldb_pause` - Pause execution of running process
+3. `lldb_step_over` - Step over current line
+4. `lldb_step_into` - Step into function call
+5. `lldb_step_out` - Step out of current function
 
-```
-=== Testing MCP Tools ===
+### New Debugger Methods (7)
+1. `continue_execution()` - Resume process execution
+2. `pause_execution()` - Pause running process
+3. `step_over(thread_id?)` - Step over with optional thread selection
+4. `step_into(thread_id?)` - Step into with optional thread selection
+5. `step_out(thread_id?)` - Step out with optional thread selection
+6. `_get_thread(thread_id?)` - Helper to get thread by ID or selected thread
+7. `_get_frame_location(thread)` - Helper to format frame location info
 
-Test 1: Attach by PID
-  Result: ✓ Attached to process 'test_app'
-  PID: 12345
-  Architecture: arm64
-  State: stopped
-  ✅ PASSED
+### Test Coverage
 
-Test 2: Attach by name
-  Result: ✓ Attached to process 'MyApp'
-  PID: 67890
-  Architecture: x86_64
-  State: stopped
-  ✅ PASSED
+#### Execution Control Tests (16 tests)
 
-Test 3: Launch app
-  Result: ✓ Launched application 'MyApp'
-  PID: 11111
-  Architecture: arm64
-  State: stopped
-  Stopped at entry: True
-  ✅ PASSED
+**lldb_continue (3 tests)**:
+- ✅ Successful continue operation
+- ✅ Error when process not stopped
+- ✅ Error when no process attached
 
-Test 4: Detach
-  Result: ✓ Successfully detached from process
-  ✅ PASSED
+**lldb_pause (3 tests)**:
+- ✅ Successful pause operation
+- ✅ Error when process not running
+- ✅ Error when no process attached
 
-Test 5: Error handling - no PID or name
-  Result: Error: Either 'pid' or 'name' must be provided
-  ✅ PASSED
+**lldb_step_over (4 tests)**:
+- ✅ Successful step over
+- ✅ Step over with specific thread ID
+- ✅ Error when process not stopped
+- ✅ Error with invalid thread ID
 
-=== All MCP tool tests passed! ===
-```
+**lldb_step_into (3 tests)**:
+- ✅ Successful step into
+- ✅ Step into with specific thread ID
+- ✅ Error when process not stopped
 
-## Tools Tested
+**lldb_step_out (3 tests)**:
+- ✅ Successful step out
+- ✅ Step out with specific thread ID
+- ✅ Error when process not stopped
 
-### 1. `lldb_attach_process`
+#### Helper Method Tests (8 tests)
 
-**Functionality**:
-- ✅ Attach to process by PID
-- ✅ Attach to process by name
-- ✅ Validate inputs (require PID or name)
-- ✅ Prevent duplicate attachment
-- ✅ Return detailed process information
+**_get_frame_location (4 tests)**:
+- ✅ Valid frame with line entry
+- ✅ Invalid frame returns <unknown>
+- ✅ No line entry falls back to PC hex address
+- ✅ Unknown function name handled correctly
 
-**Test Coverage**:
-- Success case (by PID)
-- Success case (by name)
-- Error: No PID or name provided
-- Error: Both PID and name provided
-- Error: Already attached to another process
-
-### 2. `lldb_launch_app`
-
-**Functionality**:
-- ✅ Launch executable
-- ✅ Support command-line arguments
-- ✅ Support environment variables
-- ✅ Control stop-at-entry behavior
-- ✅ Handle .app bundles
-- ✅ Prevent launching when already attached
-
-**Test Coverage**:
-- Success case (basic launch)
-- Success case (with arguments)
-- Success case (with environment)
-- Success case (no stop at entry)
-- Error: Already attached to process
-
-### 3. `lldb_detach`
-
-**Functionality**:
-- ✅ Detach from process
-- ✅ Optionally kill process on detach
-- ✅ Clean up state and frameworks
-- ✅ Prevent detach when not attached
-
-**Test Coverage**:
-- Success case (normal detach)
-- Success case (detach with kill)
-- Error: Not attached to any process
-
-## Error Handling Tested
-
-### Input Validation
-- ✅ Missing required parameters
-- ✅ Invalid parameter combinations
-- ✅ Type checking
-
-### State Validation
-- ✅ Already attached (can't attach again)
-- ✅ Not attached (can't detach)
-- ✅ Process state tracking
-
-### Error Messages
-- ✅ User-friendly error messages
-- ✅ Proper exception handling
-- ✅ `@handle_tool_errors` decorator working
+**_get_thread (4 tests)**:
+- ✅ Get thread by specific ID
+- ✅ Error on invalid thread ID
+- ✅ Get selected thread when no ID provided
+- ✅ Error when no valid selected thread
 
 ## Code Quality
 
 ### Type Hints
-- ✅ All functions have complete type hints
-- ✅ Return types specified
-- ✅ Optional parameters properly typed
+- ✅ All methods fully type-annotated
+- ✅ Optional parameters clearly marked
+- ✅ Return types documented
+
+### Error Handling
+- ✅ State validation (can't continue if running, can't pause if stopped)
+- ✅ Invalid thread ID validation
+- ✅ Process not attached errors
+- ✅ User-friendly error messages
 
 ### Documentation
 - ✅ Comprehensive docstrings
-- ✅ Args/Returns/Raises sections
-- ✅ Usage examples in docstrings
+- ✅ Parameter descriptions
+- ✅ Return value documentation
+- ✅ Raises sections for exceptions
 
-### Code Style
-- ✅ Consistent with Phase 1 patterns
-- ✅ Proper async/await usage
-- ✅ Thread-safe operations
-- ✅ State management
+### Thread Safety
+- ✅ All state-changing operations use `asyncio.Lock`
+- ✅ State transitions atomic
+- ✅ No race conditions in execution control
 
-## Test Environment
+## Review Feedback Addressed
 
-- **OS**: macOS (Darwin 25.2.0)
-- **Python**: 3.14.0
-- **pytest**: 9.0.2
-- **asyncio**: auto mode
-- **LLDB**: Xcode 26.2.0 (mocked in unit tests)
+All required changes from review have been implemented:
 
-## Files Tested
+1. ✅ **CRITICAL**: Fixed duplicate import in `server.py`
+   - Removed line 49 (absolute import)
+   - Kept line 54 (relative import)
 
-- `src/appledb_mcp/tools/base.py` - Error handling
-- `src/appledb_mcp/tools/process.py` - MCP tools
-- `src/appledb_mcp/debugger.py` - Extended functionality
-- `tests/test_tools.py` - Unit tests
-- `tests/conftest.py` - Test fixtures
+2. ✅ Added edge case tests for `_get_frame_location()`:
+   - Invalid frame test
+   - Missing line entry (PC hex fallback) test
+   - Unknown function name test
 
-## Known Limitations
+3. ✅ Added edge case tests for `_get_thread()`:
+   - Invalid thread ID test
+   - No valid selected thread test
 
-### LLDB in Virtual Environments
-- ⚠️ LLDB Python module doesn't work in venv
-- **Workaround**: Use system Python with PYTHONPATH set
-- **Impact**: Integration tests with real LLDB need special setup
-- **Status**: Documented and expected behavior
+4. ✅ Added missing error tests:
+   - `lldb_step_into()` when not stopped
+   - `lldb_step_out()` when not stopped
 
-### Real Process Testing
-- ⚠️ Manual testing with real processes requires LLDB setup
-- **Workaround**: Unit tests use mocked LLDB objects
-- **Coverage**: Logic 100% tested via mocks
-- **Status**: Sufficient for development
+5. ✅ Created TEST_RESULTS.md (this file)
 
-## Conclusion
+## Files Modified
 
-Phase 2 process management tools are **production-ready**:
+### New Files
+- `src/appledb_mcp/tools/execution.py` - 5 execution control tools
+- `tests/test_execution.py` - 16 comprehensive tests
+- `tests/test_debugger_helpers.py` - 8 helper method tests
 
-- ✅ All automated tests pass
-- ✅ Error handling comprehensive
-- ✅ Code quality high
-- ✅ Documentation complete
-- ✅ Type safety enforced
-- ✅ State management working
-- ✅ Thread safety confirmed
-
-**Recommendation**: Ready to merge to `develop` branch.
+### Modified Files
+- `src/appledb_mcp/debugger.py` - Added 7 new methods for execution control
+- `src/appledb_mcp/server.py` - Fixed duplicate import, registered execution tools
+- `README.md` - Updated to reflect Phase 3 completion
 
 ## Next Steps
 
-After merging Phase 2:
-1. Phase 3: Execution Control (continue, pause, step)
-2. Phase 4: Inspection Tools (evaluate, backtrace, variables)
-3. Phase 5: Framework Loading (xcdb integration)
+Phase 3 is complete and ready for merge:
+- ✅ All tests passing (37/37)
+- ✅ Code review feedback addressed
+- ✅ Documentation complete
+- ✅ Ready to merge PR #3 to develop branch
+
+After merge, proceed to:
+- **Phase 4**: Inspection tools (evaluate, backtrace, variables)

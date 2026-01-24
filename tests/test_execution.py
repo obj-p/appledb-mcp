@@ -177,6 +177,18 @@ class TestStepInto:
         assert "✓ Stepped into" in result
         mock_manager.step_into.assert_called_once_with(thread_id=456)
 
+    @pytest.mark.asyncio
+    async def test_step_into_not_stopped(self, mock_manager):
+        """Test step into when not stopped"""
+        mock_manager.step_into = AsyncMock(
+            side_effect=InvalidStateError("Cannot step: process is not stopped")
+        )
+
+        result = await execution.lldb_step_into()
+
+        assert "Error:" in result
+        assert "not stopped" in result
+
 
 class TestStepOut:
     """Tests for lldb_step_out tool"""
@@ -205,3 +217,15 @@ class TestStepOut:
 
         assert "✓ Stepped out" in result
         mock_manager.step_out.assert_called_once_with(thread_id=789)
+
+    @pytest.mark.asyncio
+    async def test_step_out_not_stopped(self, mock_manager):
+        """Test step out when not stopped"""
+        mock_manager.step_out = AsyncMock(
+            side_effect=InvalidStateError("Cannot step: process is not stopped")
+        )
+
+        result = await execution.lldb_step_out()
+
+        assert "Error:" in result
+        assert "not stopped" in result
