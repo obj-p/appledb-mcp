@@ -92,7 +92,7 @@ Configuration is done via environment variables:
 - `lldb_launch_app` - Launch an app with debugging
 - `lldb_detach` - Detach from the current process
 
-### Execution Control (Coming soon)
+### Execution Control
 - `lldb_continue` - Continue execution
 - `lldb_pause` - Pause execution
 - `lldb_step_over` - Step over
@@ -134,14 +134,14 @@ mypy src/appledb_mcp
 
 ## Project Status
 
-**Current Version**: 0.1.0 (Phase 2: Process Management)
+**Current Version**: 0.1.0 (Phase 3: Execution Control)
 
 - ✅ Core MCP server infrastructure
 - ✅ LLDB debugger singleton management
 - ✅ Configuration system
 - ✅ Logging and error handling
 - ✅ Process management tools (Phase 2)
-- 🚧 Execution control tools (Phase 3)
+- ✅ Execution control tools (Phase 3)
 - 🚧 Inspection tools (Phase 4)
 - 🚧 Framework loading (Phase 5)
 - 🚧 Resources (Phase 6)

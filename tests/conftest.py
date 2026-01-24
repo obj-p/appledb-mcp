@@ -18,6 +18,62 @@ def mock_lldb_debugger():
 
 
 @pytest.fixture
+def mock_thread():
+    """Mock LLDB thread"""
+    thread = MagicMock()
+    thread.IsValid.return_value = True
+    thread.GetThreadID.return_value = 1
+    thread.StepOver.return_value = None
+    thread.StepInto.return_value = None
+    thread.StepOut.return_value = None
+    thread.GetStopDescription.return_value = "breakpoint"
+
+    # Mock frame
+    frame = MagicMock()
+    frame.IsValid.return_value = True
+    frame.GetFunctionName.return_value = "main"
+    frame.GetPC.return_value = 0x100000000
+
+    # Mock line entry
+    line_entry = MagicMock()
+    line_entry.IsValid.return_value = True
+    line_entry.GetLine.return_value = 42
+
+    # Mock file spec
+    file_spec = MagicMock()
+    file_spec.GetFilename.return_value = "test.c"
+    line_entry.GetFileSpec.return_value = file_spec
+
+    frame.GetLineEntry.return_value = line_entry
+    thread.GetFrameAtIndex.return_value = frame
+
+    return thread
+
+
+@pytest.fixture
+def mock_frame():
+    """Mock LLDB frame"""
+    frame = MagicMock()
+    frame.IsValid.return_value = True
+    frame.GetFunctionName.return_value = "test_function"
+    frame.GetPC.return_value = 0x100001000
+
+    # Mock line entry
+    line_entry = MagicMock()
+    line_entry.IsValid.return_value = True
+    line_entry.GetLine.return_value = 10
+
+    # Mock file spec
+    file_spec = MagicMock()
+    file_spec.GetFilename.return_value = "main.c"
+    line_entry.GetFileSpec.return_value = file_spec
+
+    frame.GetLineEntry.return_value = line_entry
+
+    return frame
+
+
+@pytest.fixture
 def mock_lldb_target():
     """Mock LLDB SBTarget"""
     target = Mock()

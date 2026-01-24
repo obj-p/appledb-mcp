@@ -363,6 +363,204 @@ class LLDBDebuggerManager:
             self._set_state(ProcessState.DETACHED)
             self._loaded_frameworks.clear()
 
+    async def continue_execution(self) -> str:
+        """Continue execution of paused process
+
+        Returns:
+            String describing the new state
+
+        Raises:
+            ProcessNotAttachedError: If no process attached
+            InvalidStateError: If process is not stopped
+        """
+        async with self._lock:
+            if self._state != ProcessState.ATTACHED_STOPPED:
+                raise InvalidStateError(
+                    f"Cannot continue: process is not stopped (state: {self._state.value})"
+                )
+
+            process = self.get_process()
+            error = await run_lldb_operation(process.Continue)
+
+            if error.Fail():
+                raise LLDBError(f"Failed to continue: {error.GetCString()}")
+
+            self._set_state(ProcessState.ATTACHED_RUNNING)
+            logger.info("Process continued")
+
+            return self._state.value
+
+    async def pause_execution(self) -> str:
+        """Pause execution of running process
+
+        Returns:
+            String describing stop reason and location
+
+        Raises:
+            ProcessNotAttachedError: If no process attached
+            InvalidStateError: If process is not running
+        """
+        async with self._lock:
+            if self._state != ProcessState.ATTACHED_RUNNING:
+                raise InvalidStateError(
+                    f"Cannot pause: process is not running (state: {self._state.value})"
+                )
+
+            process = self.get_process()
+            error = await run_lldb_operation(process.Stop)
+
+            if error.Fail():
+                raise LLDBError(f"Failed to pause: {error.GetCString()}")
+
+            self._set_state(ProcessState.ATTACHED_STOPPED)
+            logger.info("Process paused")
+
+            # Get stop reason and location
+            thread = process.GetSelectedThread()
+            if not thread.IsValid():
+                return "paused"
+
+            stop_reason = thread.GetStopDescription(256)
+            location = self._get_frame_location(thread)
+
+            return f"Stop reason: {stop_reason}\n{location}"
+
+    async def step_over(self, thread_id: Optional[int] = None) -> str:
+        """Step over current line
+
+        Args:
+            thread_id: Optional thread ID. If None, uses selected thread
+
+        Returns:
+            String describing current frame location
+
+        Raises:
+            ProcessNotAttachedError: If no process attached
+            InvalidStateError: If process is not stopped
+            ValueError: If thread ID is invalid
+        """
+        async with self._lock:
+            if self._state != ProcessState.ATTACHED_STOPPED:
+                raise InvalidStateError(
+                    f"Cannot step: process is not stopped (state: {self._state.value})"
+                )
+
+            thread = self._get_thread(thread_id)
+            await run_lldb_operation(thread.StepOver)
+
+            # State remains ATTACHED_STOPPED
+            logger.info(f"Stepped over (thread {thread.GetThreadID()})")
+
+            return self._get_frame_location(thread)
+
+    async def step_into(self, thread_id: Optional[int] = None) -> str:
+        """Step into function call
+
+        Args:
+            thread_id: Optional thread ID. If None, uses selected thread
+
+        Returns:
+            String describing current frame location
+
+        Raises:
+            ProcessNotAttachedError: If no process attached
+            InvalidStateError: If process is not stopped
+            ValueError: If thread ID is invalid
+        """
+        async with self._lock:
+            if self._state != ProcessState.ATTACHED_STOPPED:
+                raise InvalidStateError(
+                    f"Cannot step: process is not stopped (state: {self._state.value})"
+                )
+
+            thread = self._get_thread(thread_id)
+            await run_lldb_operation(thread.StepInto)
+
+            # State remains ATTACHED_STOPPED
+            logger.info(f"Stepped into (thread {thread.GetThreadID()})")
+
+            return self._get_frame_location(thread)
+
+    async def step_out(self, thread_id: Optional[int] = None) -> str:
+        """Step out of current function
+
+        Args:
+            thread_id: Optional thread ID. If None, uses selected thread
+
+        Returns:
+            String describing current frame location
+
+        Raises:
+            ProcessNotAttachedError: If no process attached
+            InvalidStateError: If process is not stopped
+            ValueError: If thread ID is invalid
+        """
+        async with self._lock:
+            if self._state != ProcessState.ATTACHED_STOPPED:
+                raise InvalidStateError(
+                    f"Cannot step: process is not stopped (state: {self._state.value})"
+                )
+
+            thread = self._get_thread(thread_id)
+            await run_lldb_operation(thread.StepOut)
+
+            # State remains ATTACHED_STOPPED
+            logger.info(f"Stepped out (thread {thread.GetThreadID()})")
+
+            return self._get_frame_location(thread)
+
+    def _get_thread(self, thread_id: Optional[int] = None):
+        """Get thread by ID or selected thread
+
+        Args:
+            thread_id: Optional thread ID. If None, returns selected thread
+
+        Returns:
+            The requested SBThread
+
+        Raises:
+            ValueError: If thread ID is invalid or no thread available
+        """
+        process = self.get_process()
+
+        if thread_id is not None:
+            thread = process.GetThreadByID(thread_id)
+            if not thread.IsValid():
+                raise ValueError(f"Invalid thread ID: {thread_id}")
+            return thread
+
+        # Use selected thread
+        thread = process.GetSelectedThread()
+        if not thread.IsValid():
+            raise ValueError("No valid thread selected")
+
+        return thread
+
+    def _get_frame_location(self, thread) -> str:
+        """Get current frame location for a thread
+
+        Args:
+            thread: The thread to get frame location from
+
+        Returns:
+            Formatted string with function, file, and line info
+        """
+        frame = thread.GetFrameAtIndex(0)
+        if not frame.IsValid():
+            return "Location: <unknown>"
+
+        function = frame.GetFunctionName() or "<unknown>"
+        line_entry = frame.GetLineEntry()
+
+        if line_entry.IsValid():
+            file_spec = line_entry.GetFileSpec()
+            filename = file_spec.GetFilename() or "<unknown>"
+            line_number = line_entry.GetLine()
+            return f"Location: {function} at {filename}:{line_number}"
+        else:
+            pc = frame.GetPC()
+            return f"Location: {function} at {hex(pc)}"
+
     async def cleanup(self) -> None:
         """Clean up debugger resources
 
