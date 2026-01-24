@@ -17,10 +17,10 @@ class TestFrameworkResolver:
     def test_resolve_from_env_var(self, tmp_path):
         """Test resolving framework from environment variable"""
         # Create a dummy framework file
-        framework_path = tmp_path / "xcdb"
+        framework_path = tmp_path / "testframework"
         framework_path.touch()
 
-        result = resolve_framework_path("xcdb", env_var_path=framework_path)
+        result = resolve_framework_path("testframework", env_var_path=framework_path)
         assert result == str(framework_path)
 
     def test_resolve_from_env_var_not_exists(self, tmp_path):
@@ -29,8 +29,8 @@ class TestFrameworkResolver:
 
         # Should raise FileNotFoundError since no bundled or dev frameworks exist
         with pytest.raises(FileNotFoundError) as exc_info:
-            resolve_framework_path("xcdb", env_var_path=non_existent)
-        assert "Framework 'xcdb' not found" in str(exc_info.value)
+            resolve_framework_path("testframework", env_var_path=non_existent)
+        assert "Framework 'testframework' not found" in str(exc_info.value)
 
     def test_resolve_from_bundled(self, tmp_path, monkeypatch):
         """Test resolving framework from bundled location"""
@@ -41,7 +41,7 @@ class TestFrameworkResolver:
         fake_module_path.parent.mkdir(parents=True)
         fake_module_path.touch()
 
-        bundled_path = tmp_path / "frameworks" / "xcdb.framework" / "xcdb"
+        bundled_path = tmp_path / "frameworks" / "testframework.framework" / "testframework"
         bundled_path.parent.mkdir(parents=True)
         bundled_path.touch()
 
@@ -49,13 +49,13 @@ class TestFrameworkResolver:
         import appledb_mcp.utils.framework_resolver as resolver_module
         monkeypatch.setattr(resolver_module, '__file__', str(fake_module_path))
 
-        result = resolve_framework_path("xcdb")
+        result = resolve_framework_path("testframework")
         assert result == str(bundled_path)
 
     def test_resolve_from_dev_location(self, tmp_path, monkeypatch):
         """Test resolving framework from development location"""
         # Create dev framework structure
-        dev_path = tmp_path / "Projects" / "xcdb" / "build" / "xcdb.framework" / "xcdb"
+        dev_path = tmp_path / "Projects" / "testframework" / "build" / "testframework.framework" / "testframework"
         dev_path.parent.mkdir(parents=True)
         dev_path.touch()
 
@@ -65,7 +65,7 @@ class TestFrameworkResolver:
             # Make Path() constructor work normally
             mock_path.side_effect = lambda *args: Path(*args) if args else Path()
 
-            result = resolve_framework_path("xcdb")
+            result = resolve_framework_path("testframework")
             assert result == str(dev_path)
 
     def test_resolve_not_found(self):
@@ -73,7 +73,6 @@ class TestFrameworkResolver:
         with pytest.raises(FileNotFoundError) as exc_info:
             resolve_framework_path("nonexistent")
         assert "Framework 'nonexistent' not found" in str(exc_info.value)
-        assert "APPLEDB_XCDB_FRAMEWORK" in str(exc_info.value)
 
 
 class TestFrameworkLoading:
@@ -148,9 +147,9 @@ class TestFrameworkLoading:
 
     @pytest.mark.asyncio
     async def test_load_framework_by_name(self, debugger_manager, mock_lldb, tmp_path):
-        """Test loading framework by name (xcdb)"""
+        """Test loading framework by name"""
         # Create a dummy framework file
-        framework_path = tmp_path / "xcdb"
+        framework_path = tmp_path / "testframework"
         framework_path.touch()
 
         # Mock the target and process
@@ -171,17 +170,17 @@ class TestFrameworkLoading:
             with patch("appledb_mcp.debugger.run_lldb_operation") as mock_run:
                 mock_run.return_value = 0x2000
 
-                result = await debugger_manager.load_framework(framework_name="xcdb")
+                result = await debugger_manager.load_framework(framework_name="testframework")
 
                 assert result["success"] is True
                 assert result["address"] == 0x2000
                 assert result["already_loaded"] is False
-                assert "xcdb" in result["message"]
+                assert "testframework" in result["message"]
 
     @pytest.mark.asyncio
     async def test_load_framework_already_loaded(self, debugger_manager, mock_lldb, tmp_path):
         """Test loading framework that is already loaded (idempotency)"""
-        framework_path = tmp_path / "xcdb"
+        framework_path = tmp_path / "testframework"
         framework_path.touch()
 
         # Mock the target and process
@@ -189,7 +188,7 @@ class TestFrameworkLoading:
 
         # Mock that module is already loaded
         mock_module = Mock()
-        mock_module.GetFileSpec.return_value.GetFilename.return_value = "xcdb"
+        mock_module.GetFileSpec.return_value.GetFilename.return_value = "testframework"
         mock_module.GetObjectFileHeaderAddress.return_value.GetLoadAddress.return_value = 0x3000
 
         mock_target.GetNumModules.return_value = 1
@@ -199,7 +198,7 @@ class TestFrameworkLoading:
         with patch("appledb_mcp.debugger.resolve_framework_path") as mock_resolve:
             mock_resolve.return_value = str(framework_path)
 
-            result = await debugger_manager.load_framework(framework_name="xcdb")
+            result = await debugger_manager.load_framework(framework_name="testframework")
 
             assert result["success"] is True
             assert result["address"] == 0x3000
@@ -222,7 +221,7 @@ class TestFrameworkLoading:
         manager._state = ProcessState.DETACHED
 
         with pytest.raises(ProcessNotAttachedError) as exc_info:
-            await manager.load_framework(framework_name="xcdb")
+            await manager.load_framework(framework_name="testframework")
         assert "no process attached" in str(exc_info.value).lower()
 
     @pytest.mark.asyncio
@@ -237,7 +236,7 @@ class TestFrameworkLoading:
         with pytest.raises(ValueError) as exc_info:
             await debugger_manager.load_framework(
                 framework_path="/some/path",
-                framework_name="xcdb"
+                framework_name="testframework"
             )
         assert "Cannot specify both" in str(exc_info.value)
 
@@ -247,12 +246,11 @@ class TestFrameworkLoading:
         with pytest.raises(ValueError) as exc_info:
             await debugger_manager.load_framework(framework_name="invalid")
         assert "Unknown framework name" in str(exc_info.value)
-        assert "xcdb" in str(exc_info.value)
 
     @pytest.mark.asyncio
     async def test_load_framework_lldb_error(self, debugger_manager, mock_lldb, tmp_path):
         """Test error when LLDB fails to load framework"""
-        framework_path = tmp_path / "xcdb"
+        framework_path = tmp_path / "testframework"
         framework_path.touch()
 
         # Mock the target and process
@@ -274,63 +272,8 @@ class TestFrameworkLoading:
                 mock_lldb.SBError.return_value = error
 
                 with pytest.raises(LLDBError) as exc_info:
-                    await debugger_manager.load_framework(framework_name="xcdb")
+                    await debugger_manager.load_framework(framework_name="testframework")
                 assert "Failed to load framework" in str(exc_info.value)
-
-    @pytest.mark.asyncio
-    async def test_auto_load_xcdb_enabled(self, debugger_manager, mock_lldb, tmp_path):
-        """Test auto-loading xcdb on attach when enabled"""
-        framework_path = tmp_path / "xcdb"
-        framework_path.touch()
-
-        # Enable auto-load
-        debugger_manager._config.auto_load_xcdb = True
-
-        # Mock the target and process
-        mock_target = debugger_manager.get_target()
-        mock_target.GetNumModules.return_value = 0
-
-        # Mock resolve_framework_path
-        with patch("appledb_mcp.debugger.resolve_framework_path") as mock_resolve:
-            mock_resolve.return_value = str(framework_path)
-
-            with patch("appledb_mcp.debugger.run_lldb_operation") as mock_run:
-                mock_run.return_value = 0x4000
-
-                # Call auto-load directly
-                await debugger_manager._auto_load_xcdb()
-
-                # Check that xcdb was loaded
-                assert "xcdb" in debugger_manager._loaded_frameworks
-
-    @pytest.mark.asyncio
-    async def test_auto_load_xcdb_disabled(self, debugger_manager):
-        """Test auto-loading xcdb is skipped when disabled"""
-        # Disable auto-load
-        debugger_manager._config.auto_load_xcdb = False
-
-        # Call auto-load directly
-        await debugger_manager._auto_load_xcdb()
-
-        # Check that nothing was loaded
-        assert "xcdb" not in debugger_manager._loaded_frameworks
-
-    @pytest.mark.asyncio
-    async def test_auto_load_xcdb_failure_non_fatal(self, debugger_manager):
-        """Test that auto-load failure doesn't crash attach"""
-        # Enable auto-load
-        debugger_manager._config.auto_load_xcdb = True
-
-        # Mock load_framework to raise exception
-        with patch.object(debugger_manager, "load_framework") as mock_load:
-            mock_load.side_effect = FileNotFoundError("xcdb not found")
-
-            # Should not raise exception
-            await debugger_manager._auto_load_xcdb()
-
-            # Verify load_framework was called
-            mock_load.assert_called_once_with(framework_name="xcdb")
-
 
 class TestFrameworkTool:
     """Tests for the lldb_load_framework MCP tool"""
@@ -370,17 +313,17 @@ class TestFrameworkTool:
             "success": True,
             "address": 0x2000,
             "already_loaded": False,
-            "message": "Successfully loaded framework 'xcdb'"
+            "message": "Successfully loaded framework 'testframework'"
         })
 
-        result = await lldb_load_framework(framework_name="xcdb")
+        result = await lldb_load_framework(framework_name="testframework")
 
         assert "✓" in result
         assert "0x2000" in result
-        assert "xcdb" in result
+        assert "testframework" in result
         mock_manager.load_framework.assert_called_once_with(
             framework_path=None,
-            framework_name="xcdb"
+            framework_name="testframework"
         )
 
     @pytest.mark.asyncio
@@ -390,10 +333,10 @@ class TestFrameworkTool:
             "success": True,
             "address": 0x3000,
             "already_loaded": True,
-            "message": "Framework 'xcdb' was already loaded"
+            "message": "Framework 'testframework' was already loaded"
         })
 
-        result = await lldb_load_framework(framework_name="xcdb")
+        result = await lldb_load_framework(framework_name="testframework")
 
         assert "already loaded" in result
         assert "0x3000" in result
@@ -405,7 +348,7 @@ class TestFrameworkTool:
             side_effect=ProcessNotAttachedError("No process attached")
         )
 
-        result = await lldb_load_framework(framework_name="xcdb")
+        result = await lldb_load_framework(framework_name="testframework")
 
         assert "Error:" in result
         assert "No process attached" in result

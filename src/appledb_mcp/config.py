@@ -16,16 +16,6 @@ class AppleDBConfig(BaseSettings):
 
     model_config = SettingsConfigDict(env_prefix="APPLEDB_", case_sensitive=False)
 
-    # xcdb framework specific path
-    xcdb_framework_path: Optional[Path] = Field(
-        default=None, description="Path to xcdb framework binary"
-    )
-
-    # Auto-load xcdb on first process attach
-    auto_load_xcdb: bool = Field(
-        default=True, description="Auto-load xcdb framework on process attach"
-    )
-
     # LLDB timeout for commands (seconds)
     lldb_timeout: int = Field(default=30, description="Timeout for LLDB operations in seconds")
 

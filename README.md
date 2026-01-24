@@ -7,7 +7,7 @@ An MCP (Model Context Protocol) server that exposes LLDB debugging capabilities 
 - **Process Management**: Attach to running processes or launch apps for debugging
 - **Execution Control**: Continue, step over, step into, step out
 - **Expression Evaluation**: Execute Swift, Objective-C, and C++ expressions in the debugger
-- **iOS-Specific Tools**: Dynamic framework injection (integrates with [xcdb](https://github.com/obj-p/xcdb))
+- **Framework Loading**: Dynamic framework injection for runtime modifications
 - **State Inspection**: Variables, backtraces, process state
 
 ## Requirements
@@ -91,7 +91,6 @@ Add to your Claude Desktop configuration file:
       "command": "python3",
       "args": ["-m", "appledb_mcp"],
       "env": {
-        "APPLEDB_AUTO_LOAD_XCDB": "true",
         "APPLEDB_LOG_LEVEL": "INFO"
       }
     }
@@ -113,8 +112,6 @@ Configuration is done via environment variables:
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `APPLEDB_XCDB_FRAMEWORK` | Path to xcdb framework binary | Auto-detected |
-| `APPLEDB_AUTO_LOAD_XCDB` | Auto-load xcdb on process attach | `true` |
 | `APPLEDB_LOG_LEVEL` | Logging level (DEBUG, INFO, WARNING, ERROR) | `INFO` |
 | `APPLEDB_LLDB_TIMEOUT` | Timeout for LLDB operations (seconds) | `30` |
 
@@ -138,8 +135,8 @@ Configuration is done via environment variables:
 - `lldb_get_backtrace` - Get stack trace for thread
 - `lldb_get_variables` - Get local variables and arguments in frame
 
-### Framework Loading (Coming soon)
-- `lldb_load_framework` - Load xcdb or custom framework
+### Framework Loading
+- `lldb_load_framework` - Load custom frameworks dynamically
 
 ## Development
 
@@ -243,7 +240,3 @@ MIT
 ## Author
 
 Jason Prasad
-
-## Related Projects
-
-- [xcdb](https://github.com/obj-p/xcdb) - LLDB extensions for iOS debugging

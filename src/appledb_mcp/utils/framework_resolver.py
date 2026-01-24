@@ -60,6 +60,6 @@ def resolve_framework_path(framework_name: str, env_var_path: Optional[Path] = N
     error_msg += f"  - Bundled: {bundled_path}\n"
     for dev_path in dev_locations:
         error_msg += f"  - Development: {dev_path}\n"
-    error_msg += f"\nTo configure, set APPLEDB_XCDB_FRAMEWORK=/path/to/{framework_name}.framework/{framework_name}"
+    error_msg += f"\nTo use a custom path, provide the full path to the framework binary when calling lldb_load_framework"
 
     raise FileNotFoundError(error_msg)

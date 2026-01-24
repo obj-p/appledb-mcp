@@ -202,9 +202,6 @@ class LLDBDebuggerManager:
             self._set_state(ProcessState.ATTACHED_STOPPED)
             logger.info(f"Attached to process {pid}")
 
-            # Auto-load xcdb if configured
-            await self._auto_load_xcdb()
-
             # Return process info
             executable = target.GetExecutable()
             process_name = executable.GetFilename() if executable.IsValid() else ""
@@ -252,9 +249,6 @@ class LLDBDebuggerManager:
 
             self._set_state(ProcessState.ATTACHED_STOPPED)
             logger.info(f"Attached to process '{name}' (PID {process.GetProcessID()})")
-
-            # Auto-load xcdb if configured
-            await self._auto_load_xcdb()
 
             # Return process info
             executable = target.GetExecutable()
@@ -861,21 +855,6 @@ class LLDBDebuggerManager:
                 "already_loaded": False,
                 "message": f"Successfully loaded framework '{framework_filename}'",
             }
-
-    async def _auto_load_xcdb(self) -> None:
-        """Auto-load xcdb framework if configured
-
-        This is called automatically after successful attach.
-        Failures are logged but do not fail the attach operation.
-        """
-        if not self._config or not self._config.auto_load_xcdb:
-            return
-
-        try:
-            result = await self.load_framework(framework_name="xcdb")
-            logger.info(f"Auto-loaded xcdb: {result['message']}")
-        except Exception as e:
-            logger.warning(f"Failed to auto-load xcdb (this is non-fatal): {e}")
 
     async def cleanup(self) -> None:
         """Clean up debugger resources
