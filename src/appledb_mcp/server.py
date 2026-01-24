@@ -46,8 +46,12 @@ async def app_lifespan(server: FastMCP):
 mcp = FastMCP("appledb", lifespan=app_lifespan)
 
 
-# Tools will be registered in subsequent phases
-# For now, just provide a health check tool for testing
+# Import tools to register them with the MCP server
+# This must be done after mcp instance is created
+from .tools import process  # noqa: E402, F401
+
+
+# Health check tool for testing
 
 @mcp.tool()
 async def health_check() -> str:

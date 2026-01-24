@@ -208,6 +208,132 @@ class LLDBDebuggerManager:
                 architecture=target.GetTriple() or "unknown",
             )
 
+    async def attach_process_by_name(self, name: str) -> ProcessInfo:
+        """Attach to a process by name
+
+        Args:
+            name: Process name to attach to
+
+        Returns:
+            ProcessInfo with details about attached process
+
+        Raises:
+            InvalidStateError: If already attached to a process
+            LLDBError: If attach operation fails
+        """
+        async with self._lock:
+            if self._state != ProcessState.DETACHED:
+                raise InvalidStateError(f"Already attached to a process (state: {self._state.value})")
+
+            debugger = self.get_debugger()
+
+            # Create target and attach by name
+            error = lldb.SBError()
+            target = debugger.CreateTarget("")
+
+            if not target.IsValid():
+                raise LLDBError("Failed to create target")
+
+            listener = lldb.SBListener("attach-listener")
+            process = await run_lldb_operation(
+                target.AttachToProcessWithName, listener, name, False, error
+            )
+
+            if error.Fail() or not process.IsValid():
+                error_msg = error.GetCString() if error.Fail() else "Unknown error"
+                raise LLDBError(f"Failed to attach to process '{name}': {error_msg}")
+
+            self._set_state(ProcessState.ATTACHED_STOPPED)
+            logger.info(f"Attached to process '{name}' (PID {process.GetProcessID()})")
+
+            # Return process info
+            return ProcessInfo(
+                pid=process.GetProcessID(),
+                name=process.GetName() or "",
+                state="stopped",
+                architecture=target.GetTriple() or "unknown",
+            )
+
+    async def launch_app(
+        self,
+        executable: str,
+        args: Optional[list[str]] = None,
+        env: Optional[dict[str, str]] = None,
+        stop_at_entry: bool = True,
+    ) -> ProcessInfo:
+        """Launch an application for debugging
+
+        Args:
+            executable: Path to executable or .app bundle
+            args: Optional command-line arguments
+            env: Optional environment variables
+            stop_at_entry: If True, stop at entry point; otherwise run
+
+        Returns:
+            ProcessInfo with details about launched process
+
+        Raises:
+            InvalidStateError: If already attached to a process
+            LLDBError: If launch operation fails
+        """
+        async with self._lock:
+            if self._state != ProcessState.DETACHED:
+                raise InvalidStateError(f"Already attached to a process (state: {self._state.value})")
+
+            debugger = self.get_debugger()
+
+            # Handle .app bundles - resolve to executable
+            resolved_executable = executable
+            if executable.endswith(".app"):
+                import os
+                # Look for executable inside .app/Contents/MacOS/
+                app_name = os.path.basename(executable).replace(".app", "")
+                possible_executable = os.path.join(executable, "Contents", "MacOS", app_name)
+                if os.path.exists(possible_executable):
+                    resolved_executable = possible_executable
+                else:
+                    raise LLDBError(f"Could not find executable in .app bundle: {executable}")
+
+            # Create target
+            error = lldb.SBError()
+            target = await run_lldb_operation(
+                debugger.CreateTarget, resolved_executable, None, None, True, error
+            )
+
+            if error.Fail() or not target.IsValid():
+                error_msg = error.GetCString() if error.Fail() else "Unknown error"
+                raise LLDBError(f"Failed to create target for '{resolved_executable}': {error_msg}")
+
+            # Set up launch info
+            launch_info = lldb.SBLaunchInfo(args or [])
+            if env:
+                env_list = [f"{key}={value}" for key, value in env.items()]
+                for i, env_entry in enumerate(env_list):
+                    launch_info.SetEnvironmentEntryAtIndex(env_entry, i)
+
+            if stop_at_entry:
+                launch_info.SetLaunchFlags(launch_info.GetLaunchFlags() | lldb.eLaunchFlagStopAtEntry)
+
+            # Launch process
+            error = lldb.SBError()
+            process = await run_lldb_operation(target.Launch, launch_info, error)
+
+            if error.Fail() or not process.IsValid():
+                error_msg = error.GetCString() if error.Fail() else "Unknown error"
+                raise LLDBError(f"Failed to launch '{resolved_executable}': {error_msg}")
+
+            state = ProcessState.ATTACHED_STOPPED if stop_at_entry else ProcessState.ATTACHED_RUNNING
+            self._set_state(state)
+            logger.info(f"Launched '{resolved_executable}' (PID {process.GetProcessID()})")
+
+            # Return process info
+            return ProcessInfo(
+                pid=process.GetProcessID(),
+                name=process.GetName() or "",
+                state="stopped" if stop_at_entry else "running",
+                architecture=target.GetTriple() or "unknown",
+            )
+
     async def detach(self, kill: bool = False) -> None:
         """Detach from current process
 

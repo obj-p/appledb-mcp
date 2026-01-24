@@ -88,8 +88,6 @@ Configuration is done via environment variables:
 
 ### Process Management
 - `health_check` - Check server health and LLDB status
-
-**Coming soon:**
 - `lldb_attach_process` - Attach to a running process by PID or name
 - `lldb_launch_app` - Launch an app with debugging
 - `lldb_detach` - Detach from the current process
@@ -136,13 +134,13 @@ mypy src/appledb_mcp
 
 ## Project Status
 
-**Current Version**: 0.1.0 (Phase 1: Foundation)
+**Current Version**: 0.1.0 (Phase 2: Process Management)
 
 - ✅ Core MCP server infrastructure
 - ✅ LLDB debugger singleton management
 - ✅ Configuration system
 - ✅ Logging and error handling
-- 🚧 Process management tools (Phase 2)
+- ✅ Process management tools (Phase 2)
 - 🚧 Execution control tools (Phase 3)
 - 🚧 Inspection tools (Phase 4)
 - 🚧 Framework loading (Phase 5)
