@@ -1,0 +1,262 @@
+"""LLDB debugger singleton manager"""
+
+import asyncio
+import logging
+from enum import Enum
+from typing import Optional, Set
+
+from .config import AppleDBConfig
+from .models import ProcessInfo
+from .utils.errors import InvalidStateError, LLDBError, ProcessNotAttachedError
+from .utils.lldb_helpers import check_lldb_available, get_lldb_path, run_lldb_operation
+
+try:
+    import lldb
+except ImportError:
+    lldb = None  # type: ignore
+
+logger = logging.getLogger(__name__)
+
+
+class ProcessState(Enum):
+    """Process attachment state"""
+
+    DETACHED = "detached"
+    ATTACHED_STOPPED = "stopped"
+    ATTACHED_RUNNING = "running"
+
+
+class LLDBDebuggerManager:
+    """Singleton manager for LLDB debugger instance
+
+    This class manages a single LLDB debugger instance throughout the server lifecycle.
+    It provides thread-safe access to LLDB operations and tracks process state.
+    """
+
+    _instance: Optional["LLDBDebuggerManager"] = None
+    _lock = asyncio.Lock()
+
+    def __new__(cls) -> "LLDBDebuggerManager":
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance
+
+    def __init__(self) -> None:
+        # Only initialize once
+        if hasattr(self, "_initialized"):
+            return
+
+        self._debugger: Optional[lldb.SBDebugger] = None
+        self._state = ProcessState.DETACHED
+        self._loaded_frameworks: Set[str] = set()
+        self._config: Optional[AppleDBConfig] = None
+        self._initialized = True
+
+    @classmethod
+    def get_instance(cls) -> "LLDBDebuggerManager":
+        """Get the singleton instance
+
+        Returns:
+            The singleton LLDBDebuggerManager instance
+        """
+        return cls()
+
+    def initialize(self, config: AppleDBConfig) -> None:
+        """Initialize LLDB debugger (idempotent)
+
+        Args:
+            config: Configuration object
+
+        Raises:
+            RuntimeError: If LLDB is not available
+        """
+        if self._debugger is not None:
+            logger.debug("LLDB debugger already initialized")
+            return
+
+        if not check_lldb_available():
+            lldb_path = get_lldb_path()
+            error_msg = "LLDB not found. "
+            if lldb_path:
+                error_msg += f"Add to PYTHONPATH: export PYTHONPATH={lldb_path}:$PYTHONPATH"
+            else:
+                error_msg += "Install Xcode: xcode-select --install"
+            raise RuntimeError(error_msg)
+
+        logger.info("Initializing LLDB debugger")
+        lldb.SBDebugger.Initialize()
+        self._debugger = lldb.SBDebugger.Create()
+        self._debugger.SetAsync(False)  # Synchronous mode for simplicity
+        self._config = config
+        logger.info("LLDB debugger initialized successfully")
+
+    def get_debugger(self) -> lldb.SBDebugger:
+        """Get current debugger instance
+
+        Returns:
+            The LLDB SBDebugger instance
+
+        Raises:
+            RuntimeError: If debugger not initialized
+        """
+        if self._debugger is None:
+            raise RuntimeError("Debugger not initialized. Call initialize() first.")
+        return self._debugger
+
+    def get_target(self) -> lldb.SBTarget:
+        """Get currently selected target
+
+        Returns:
+            The current SBTarget
+
+        Raises:
+            RuntimeError: If no valid target selected
+        """
+        debugger = self.get_debugger()
+        target = debugger.GetSelectedTarget()
+        if not target.IsValid():
+            raise RuntimeError("No valid target selected")
+        return target
+
+    def get_process(self) -> lldb.SBProcess:
+        """Get currently attached process
+
+        Returns:
+            The current SBProcess
+
+        Raises:
+            ProcessNotAttachedError: If no valid process attached
+        """
+        try:
+            target = self.get_target()
+        except RuntimeError:
+            raise ProcessNotAttachedError("No process attached")
+
+        process = target.GetProcess()
+        if not process.IsValid():
+            raise ProcessNotAttachedError("No process attached")
+        return process
+
+    def is_attached(self) -> bool:
+        """Check if attached to a process
+
+        Returns:
+            True if attached to a valid process, False otherwise
+        """
+        return self._state != ProcessState.DETACHED
+
+    def get_state(self) -> ProcessState:
+        """Get current process state
+
+        Returns:
+            Current ProcessState
+        """
+        return self._state
+
+    def _set_state(self, state: ProcessState) -> None:
+        """Set process state
+
+        Args:
+            state: New process state
+        """
+        logger.debug(f"Process state: {self._state.value} -> {state.value}")
+        self._state = state
+
+    async def attach_process_by_pid(self, pid: int) -> ProcessInfo:
+        """Attach to a process by PID
+
+        Args:
+            pid: Process ID to attach to
+
+        Returns:
+            ProcessInfo with details about attached process
+
+        Raises:
+            InvalidStateError: If already attached to a process
+            LLDBError: If attach operation fails
+        """
+        async with self._lock:
+            if self._state != ProcessState.DETACHED:
+                raise InvalidStateError(f"Already attached to a process (state: {self._state.value})")
+
+            debugger = self.get_debugger()
+
+            # Create target and attach
+            error = lldb.SBError()
+            target = debugger.CreateTarget("")
+
+            if not target.IsValid():
+                raise LLDBError("Failed to create target")
+
+            listener = lldb.SBListener("attach-listener")
+            process = await run_lldb_operation(
+                target.AttachToProcessWithID, listener, pid, error
+            )
+
+            if error.Fail() or not process.IsValid():
+                error_msg = error.GetCString() if error.Fail() else "Unknown error"
+                raise LLDBError(f"Failed to attach to process {pid}: {error_msg}")
+
+            self._set_state(ProcessState.ATTACHED_STOPPED)
+            logger.info(f"Attached to process {pid}")
+
+            # Return process info
+            return ProcessInfo(
+                pid=process.GetProcessID(),
+                name=process.GetName() or "",
+                state="stopped",
+                architecture=target.GetTriple() or "unknown",
+            )
+
+    async def detach(self, kill: bool = False) -> None:
+        """Detach from current process
+
+        Args:
+            kill: If True, kill the process; otherwise just detach
+
+        Raises:
+            ProcessNotAttachedError: If no process attached
+        """
+        async with self._lock:
+            if self._state == ProcessState.DETACHED:
+                raise ProcessNotAttachedError("No process attached")
+
+            process = self.get_process()
+
+            if kill:
+                error = process.Kill()
+                if error.Fail():
+                    raise LLDBError(f"Failed to kill process: {error.GetCString()}")
+                logger.info(f"Killed process {process.GetProcessID()}")
+            else:
+                error = process.Detach()
+                if error.Fail():
+                    raise LLDBError(f"Failed to detach: {error.GetCString()}")
+                logger.info(f"Detached from process {process.GetProcessID()}")
+
+            self._set_state(ProcessState.DETACHED)
+            self._loaded_frameworks.clear()
+
+    async def cleanup(self) -> None:
+        """Clean up debugger resources
+
+        This should be called when shutting down the server.
+        """
+        if self._debugger is None:
+            return
+
+        logger.info("Cleaning up LLDB debugger")
+
+        # Detach from any attached process
+        try:
+            if self.is_attached():
+                await self.detach()
+        except Exception as e:
+            logger.warning(f"Error detaching during cleanup: {e}")
+
+        # Destroy debugger
+        lldb.SBDebugger.Destroy(self._debugger)
+        lldb.SBDebugger.Terminate()
+        self._debugger = None
+        self._loaded_frameworks.clear()
+        logger.info("LLDB debugger cleaned up")
