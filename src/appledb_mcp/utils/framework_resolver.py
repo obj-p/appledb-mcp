@@ -12,7 +12,7 @@ def resolve_framework_path(framework_name: str, env_var_path: Optional[Path] = N
     """Resolve framework path using priority: env var → bundled → development mode
 
     Args:
-        framework_name: Name of the framework (e.g., "xcdb")
+        framework_name: Name of the framework (e.g., "myframework")
         env_var_path: Optional explicit path from environment variable
 
     Returns:
@@ -41,7 +41,7 @@ def resolve_framework_path(framework_name: str, env_var_path: Optional[Path] = N
         return str(bundled_path)
 
     # Priority 3: Development mode
-    # Check if xcdb project exists in common development locations
+    # Check if framework project exists in common development locations
     dev_locations = [
         Path.home() / "Projects" / framework_name / "build" / f"{framework_name}.framework" / framework_name,
         Path.home() / "Developer" / framework_name / "build" / f"{framework_name}.framework" / framework_name,
@@ -60,6 +60,6 @@ def resolve_framework_path(framework_name: str, env_var_path: Optional[Path] = N
     error_msg += f"  - Bundled: {bundled_path}\n"
     for dev_path in dev_locations:
         error_msg += f"  - Development: {dev_path}\n"
-    error_msg += f"\nTo configure, set APPLEDB_XCDB_FRAMEWORK=/path/to/{framework_name}.framework/{framework_name}"
+    error_msg += f"\nTo use a custom path, provide the full path to the framework binary when calling lldb_load_framework"
 
     raise FileNotFoundError(error_msg)
