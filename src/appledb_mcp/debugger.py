@@ -201,9 +201,11 @@ class LLDBDebuggerManager:
             logger.info(f"Attached to process {pid}")
 
             # Return process info
+            executable = target.GetExecutable()
+            process_name = executable.GetFilename() if executable.IsValid() else ""
             return ProcessInfo(
                 pid=process.GetProcessID(),
-                name=process.GetName() or "",
+                name=process_name,
                 state="stopped",
                 architecture=target.GetTriple() or "unknown",
             )
@@ -247,9 +249,11 @@ class LLDBDebuggerManager:
             logger.info(f"Attached to process '{name}' (PID {process.GetProcessID()})")
 
             # Return process info
+            executable = target.GetExecutable()
+            process_name = executable.GetFilename() if executable.IsValid() else name
             return ProcessInfo(
                 pid=process.GetProcessID(),
-                name=process.GetName() or "",
+                name=process_name,
                 state="stopped",
                 architecture=target.GetTriple() or "unknown",
             )
@@ -327,9 +331,11 @@ class LLDBDebuggerManager:
             logger.info(f"Launched '{resolved_executable}' (PID {process.GetProcessID()})")
 
             # Return process info
+            executable = target.GetExecutable()
+            process_name = executable.GetFilename() if executable.IsValid() else ""
             return ProcessInfo(
                 pid=process.GetProcessID(),
-                name=process.GetName() or "",
+                name=process_name,
                 state="stopped" if stop_at_entry else "running",
                 architecture=target.GetTriple() or "unknown",
             )
