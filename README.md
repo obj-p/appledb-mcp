@@ -99,10 +99,10 @@ Configuration is done via environment variables:
 - `lldb_step_into` - Step into
 - `lldb_step_out` - Step out
 
-### Inspection (Coming soon)
-- `lldb_evaluate` - Evaluate an expression
-- `lldb_get_backtrace` - Get stack trace
-- `lldb_get_variables` - Get local variables
+### Inspection
+- `lldb_evaluate` - Evaluate expressions (supports Swift, Objective-C, C++, C)
+- `lldb_get_backtrace` - Get stack trace for thread
+- `lldb_get_variables` - Get local variables and arguments in frame
 
 ### Framework Loading (Coming soon)
 - `lldb_load_framework` - Load xcdb or custom framework
@@ -134,7 +134,7 @@ mypy src/appledb_mcp
 
 ## Project Status
 
-**Current Version**: 0.1.0 (Phase 3: Execution Control)
+**Current Version**: 0.1.0 (Phase 4: Inspection Tools)
 
 - ✅ Core MCP server infrastructure
 - ✅ LLDB debugger singleton management
@@ -142,7 +142,7 @@ mypy src/appledb_mcp
 - ✅ Logging and error handling
 - ✅ Process management tools (Phase 2)
 - ✅ Execution control tools (Phase 3)
-- 🚧 Inspection tools (Phase 4)
+- ✅ Inspection tools (Phase 4)
 - 🚧 Framework loading (Phase 5)
 - 🚧 Resources (Phase 6)
 
