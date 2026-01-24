@@ -201,9 +201,11 @@ class LLDBDebuggerManager:
             logger.info(f"Attached to process {pid}")
 
             # Return process info
+            executable = target.GetExecutable()
+            process_name = executable.GetFilename() if executable.IsValid() else ""
             return ProcessInfo(
                 pid=process.GetProcessID(),
-                name=process.GetName() or "",
+                name=process_name,
                 state="stopped",
                 architecture=target.GetTriple() or "unknown",
             )
@@ -247,9 +249,11 @@ class LLDBDebuggerManager:
             logger.info(f"Attached to process '{name}' (PID {process.GetProcessID()})")
 
             # Return process info
+            executable = target.GetExecutable()
+            process_name = executable.GetFilename() if executable.IsValid() else name
             return ProcessInfo(
                 pid=process.GetProcessID(),
-                name=process.GetName() or "",
+                name=process_name,
                 state="stopped",
                 architecture=target.GetTriple() or "unknown",
             )
@@ -327,9 +331,11 @@ class LLDBDebuggerManager:
             logger.info(f"Launched '{resolved_executable}' (PID {process.GetProcessID()})")
 
             # Return process info
+            executable = target.GetExecutable()
+            process_name = executable.GetFilename() if executable.IsValid() else ""
             return ProcessInfo(
                 pid=process.GetProcessID(),
-                name=process.GetName() or "",
+                name=process_name,
                 state="stopped" if stop_at_entry else "running",
                 architecture=target.GetTriple() or "unknown",
             )
@@ -560,6 +566,209 @@ class LLDBDebuggerManager:
         else:
             pc = frame.GetPC()
             return f"Location: {function} at {hex(pc)}"
+
+    async def evaluate_expression(
+        self,
+        expression: str,
+        language: Optional[str] = None,
+        frame_index: int = 0,
+    ) -> dict:
+        """Evaluate expression in debugger context
+
+        Args:
+            expression: Expression to evaluate
+            language: Optional language ("swift", "objc", "c++", "c")
+            frame_index: Frame index to evaluate in (default 0 = current frame)
+
+        Returns:
+            Dictionary with {value, type, summary, error?}
+
+        Raises:
+            ProcessNotAttachedError: If no process attached
+            InvalidStateError: If process is not stopped
+            ValueError: If invalid frame index
+        """
+        async with self._lock:
+            if self._state != ProcessState.ATTACHED_STOPPED:
+                raise InvalidStateError(
+                    f"Cannot evaluate: process is not stopped (state: {self._state.value})"
+                )
+
+            process = self.get_process()
+            thread = process.GetSelectedThread()
+            if not thread.IsValid():
+                raise ValueError("No valid thread selected")
+
+            frame = thread.GetFrameAtIndex(frame_index)
+            if not frame.IsValid():
+                raise ValueError(f"Invalid frame index: {frame_index}")
+
+            # Set up expression options
+            options = lldb.SBExpressionOptions()
+
+            # Set language if specified
+            if language:
+                language_map = {
+                    "swift": lldb.eLanguageTypeSwift,
+                    "objc": lldb.eLanguageTypeObjC,
+                    "c++": lldb.eLanguageTypeC_plus_plus,
+                    "c": lldb.eLanguageTypeC,
+                }
+                if language.lower() not in language_map:
+                    raise ValueError(
+                        f"Invalid language: {language}. Must be one of: {', '.join(language_map.keys())}"
+                    )
+                options.SetLanguage(language_map[language.lower()])
+
+            # Evaluate expression
+            value = await run_lldb_operation(frame.EvaluateExpression, expression, options)
+
+            # Extract result
+            error = value.GetError()
+            if error.Fail():
+                return {
+                    "value": None,
+                    "type": None,
+                    "summary": None,
+                    "error": error.GetCString(),
+                }
+
+            return {
+                "value": value.GetValue(),
+                "type": value.GetTypeName(),
+                "summary": value.GetSummary(),
+                "error": None,
+            }
+
+    async def get_backtrace(
+        self, thread_id: Optional[int] = None, max_frames: Optional[int] = None
+    ) -> list[dict]:
+        """Get stack trace for thread
+
+        Args:
+            thread_id: Optional thread ID. If None, uses selected thread
+            max_frames: Maximum number of frames to return. If None, uses config default
+
+        Returns:
+            List of frame dictionaries with {index, pc, function, file, line, module}
+
+        Raises:
+            ProcessNotAttachedError: If no process attached
+            ValueError: If thread ID is invalid
+        """
+        async with self._lock:
+            if not self.is_attached():
+                raise ProcessNotAttachedError("No process attached")
+
+            thread = self._get_thread(thread_id)
+
+            # Use config default if not specified
+            if max_frames is None and self._config:
+                max_frames = 100  # Default to 100 frames
+
+            # Collect frames
+            frames = []
+            num_frames = thread.GetNumFrames()
+            frame_count = min(num_frames, max_frames) if max_frames else num_frames
+
+            for i in range(frame_count):
+                frame = thread.GetFrameAtIndex(i)
+                if not frame.IsValid():
+                    continue
+
+                # Get frame details
+                function = frame.GetFunctionName() or "<unknown>"
+                pc = frame.GetPC()
+                module_name = None
+
+                # Get module name
+                module = frame.GetModule()
+                if module.IsValid():
+                    file_spec = module.GetFileSpec()
+                    if file_spec.IsValid():
+                        module_name = file_spec.GetFilename()
+
+                # Get file and line info
+                line_entry = frame.GetLineEntry()
+                if line_entry.IsValid():
+                    file_spec = line_entry.GetFileSpec()
+                    file_name = file_spec.GetFilename() if file_spec.IsValid() else None
+                    line_number = line_entry.GetLine()
+                else:
+                    file_name = None
+                    line_number = None
+
+                frames.append({
+                    "index": i,
+                    "pc": hex(pc),
+                    "function": function,
+                    "file": file_name,
+                    "line": line_number,
+                    "module": module_name,
+                })
+
+            return frames
+
+    async def get_variables(
+        self,
+        frame_index: int = 0,
+        include_arguments: bool = True,
+        include_locals: bool = True,
+    ) -> list[dict]:
+        """Get local variables in frame
+
+        Args:
+            frame_index: Frame index to get variables from (default 0 = current frame)
+            include_arguments: Include function arguments
+            include_locals: Include local variables
+
+        Returns:
+            List of variable dictionaries with {name, type, value, summary}
+
+        Raises:
+            ProcessNotAttachedError: If no process attached
+            InvalidStateError: If process is not stopped
+            ValueError: If invalid frame index
+        """
+        async with self._lock:
+            if self._state != ProcessState.ATTACHED_STOPPED:
+                raise InvalidStateError(
+                    f"Cannot get variables: process is not stopped (state: {self._state.value})"
+                )
+
+            process = self.get_process()
+            thread = process.GetSelectedThread()
+            if not thread.IsValid():
+                raise ValueError("No valid thread selected")
+
+            frame = thread.GetFrameAtIndex(frame_index)
+            if not frame.IsValid():
+                raise ValueError(f"Invalid frame index: {frame_index}")
+
+            # Get variables using SBFrame.GetVariables()
+            # Parameters: arguments, locals, statics, in_scope_only
+            value_list = frame.GetVariables(
+                include_arguments,  # arguments
+                include_locals,     # locals
+                False,              # statics
+                True,               # in_scope_only
+            )
+
+            # Convert to list of dictionaries
+            variables = []
+            for i in range(value_list.GetSize()):
+                value = value_list.GetValueAtIndex(i)
+                if not value.IsValid():
+                    continue
+
+                variables.append({
+                    "name": value.GetName(),
+                    "type": value.GetTypeName(),
+                    "value": value.GetValue(),
+                    "summary": value.GetSummary(),
+                })
+
+            return variables
 
     async def cleanup(self) -> None:
         """Clean up debugger resources

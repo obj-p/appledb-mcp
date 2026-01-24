@@ -32,16 +32,21 @@ def mock_lldb_module():
     mock_debugger.GetVersionString.return_value = "lldb-1400.0.0"
     mock_debugger.SetAsync.return_value = None
 
+    # Mock SBFileSpec (for executable)
+    mock_executable = Mock()
+    mock_executable.IsValid.return_value = True
+    mock_executable.GetFilename.return_value = "test_app"
+
     # Mock SBTarget
     mock_target = Mock()
     mock_target.IsValid.return_value = True
     mock_target.GetTriple.return_value = "arm64-apple-macosx"
+    mock_target.GetExecutable.return_value = mock_executable
 
     # Mock SBProcess
     mock_process = Mock()
     mock_process.IsValid.return_value = True
     mock_process.GetProcessID.return_value = 12345
-    mock_process.GetName.return_value = "test_app"
     mock_process.GetState.return_value = 5
 
     # Mock SBError
