@@ -76,9 +76,15 @@ def mock_frame():
 @pytest.fixture
 def mock_lldb_target():
     """Mock LLDB SBTarget"""
+    # Mock executable
+    mock_executable = Mock()
+    mock_executable.IsValid.return_value = True
+    mock_executable.GetFilename.return_value = "test_app"
+
     target = Mock()
     target.IsValid.return_value = True
     target.GetTriple.return_value = "arm64-apple-macosx"
+    target.GetExecutable.return_value = mock_executable
     target.GetProcess.return_value = Mock()
     target.AttachToProcessWithID.return_value = Mock()
     target.AttachToProcessWithName.return_value = Mock()
