@@ -47,7 +47,7 @@ mcp = FastMCP("appledb", lifespan=app_lifespan)
 
 # Import tools to register them with the MCP server
 # This must be done after mcp instance is created
-from .tools import process, execution, inspection  # noqa: E402, F401
+from .tools import process, execution, inspection, framework  # noqa: E402, F401
 
 
 # Health check tool for testing

@@ -2,12 +2,14 @@
 
 import asyncio
 import logging
+import os
 from enum import Enum
 from typing import Optional, Set
 
 from .config import AppleDBConfig
 from .models import ProcessInfo
 from .utils.errors import InvalidStateError, LLDBError, ProcessNotAttachedError
+from .utils.framework_resolver import resolve_framework_path
 from .utils.lldb_helpers import check_lldb_available, get_lldb_path, run_lldb_operation
 
 try:
@@ -200,6 +202,9 @@ class LLDBDebuggerManager:
             self._set_state(ProcessState.ATTACHED_STOPPED)
             logger.info(f"Attached to process {pid}")
 
+            # Auto-load xcdb if configured
+            await self._auto_load_xcdb()
+
             # Return process info
             executable = target.GetExecutable()
             process_name = executable.GetFilename() if executable.IsValid() else ""
@@ -247,6 +252,9 @@ class LLDBDebuggerManager:
 
             self._set_state(ProcessState.ATTACHED_STOPPED)
             logger.info(f"Attached to process '{name}' (PID {process.GetProcessID()})")
+
+            # Auto-load xcdb if configured
+            await self._auto_load_xcdb()
 
             # Return process info
             executable = target.GetExecutable()
@@ -769,6 +777,105 @@ class LLDBDebuggerManager:
                 })
 
             return variables
+
+    async def load_framework(
+        self,
+        framework_path: Optional[str] = None,
+        framework_name: Optional[str] = None,
+    ) -> dict:
+        """Load a dynamic framework into the process
+
+        Args:
+            framework_path: Explicit path to framework binary (mutually exclusive with framework_name)
+            framework_name: Named framework like "xcdb" (mutually exclusive with framework_path)
+
+        Returns:
+            Dictionary with {success: bool, address: int, already_loaded: bool, message: str}
+
+        Raises:
+            ProcessNotAttachedError: If no process attached
+            ValueError: If neither or both parameters provided, or invalid framework_name
+            FileNotFoundError: If framework path cannot be resolved
+            LLDBError: If framework loading fails
+        """
+        async with self._lock:
+            if not self.is_attached():
+                raise ProcessNotAttachedError("Cannot load framework: no process attached")
+
+            # Validate inputs
+            if not framework_path and not framework_name:
+                raise ValueError("Either 'framework_path' or 'framework_name' must be provided")
+            if framework_path and framework_name:
+                raise ValueError("Cannot specify both 'framework_path' and 'framework_name'")
+
+            # Resolve framework path
+            if framework_path:
+                resolved_path = framework_path
+                framework_filename = os.path.basename(framework_path)
+            elif framework_name:
+                # Only "xcdb" is supported for now
+                if framework_name.lower() != "xcdb":
+                    raise ValueError(f"Unknown framework name: {framework_name}. Only 'xcdb' is supported")
+
+                resolved_path = resolve_framework_path(
+                    framework_name,
+                    self._config.xcdb_framework_path if self._config else None
+                )
+                framework_filename = framework_name
+
+            # Check if framework already loaded
+            target = self.get_target()
+            for i in range(target.GetNumModules()):
+                module = target.GetModuleAtIndex(i)
+                if module.GetFileSpec().GetFilename() == framework_filename:
+                    address = module.GetObjectFileHeaderAddress().GetLoadAddress(target)
+                    logger.info(f"Framework '{framework_filename}' already loaded at {hex(address)}")
+                    return {
+                        "success": True,
+                        "address": address,
+                        "already_loaded": True,
+                        "message": f"Framework '{framework_filename}' was already loaded",
+                    }
+
+            # Load the framework
+            process = self.get_process()
+            error = lldb.SBError()
+
+            logger.info(f"Loading framework from: {resolved_path}")
+            image_token = await run_lldb_operation(
+                process.LoadImage,
+                lldb.SBFileSpec(resolved_path, False),
+                error
+            )
+
+            if error.Fail():
+                raise LLDBError(f"Failed to load framework: {error.GetCString()}")
+
+            # Track loaded framework
+            self._loaded_frameworks.add(framework_filename)
+            logger.info(f"Successfully loaded framework '{framework_filename}' at {hex(image_token)}")
+
+            return {
+                "success": True,
+                "address": image_token,
+                "already_loaded": False,
+                "message": f"Successfully loaded framework '{framework_filename}'",
+            }
+
+    async def _auto_load_xcdb(self) -> None:
+        """Auto-load xcdb framework if configured
+
+        This is called automatically after successful attach.
+        Failures are logged but do not fail the attach operation.
+        """
+        if not self._config or not self._config.auto_load_xcdb:
+            return
+
+        try:
+            result = await self.load_framework(framework_name="xcdb")
+            logger.info(f"Auto-loaded xcdb: {result['message']}")
+        except Exception as e:
+            logger.warning(f"Failed to auto-load xcdb (this is non-fatal): {e}")
 
     async def cleanup(self) -> None:
         """Clean up debugger resources
