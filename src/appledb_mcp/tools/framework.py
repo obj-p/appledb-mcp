@@ -19,13 +19,12 @@ async def lldb_load_framework(
 ) -> str:
     """Load a dynamic framework into the debugged process
 
-    This tool allows loading dynamic frameworks (like xcdb) into the currently
-    attached process. The operation is idempotent - if the framework is already
-    loaded, it will not be loaded again.
+    This tool allows loading dynamic frameworks into the currently attached process.
+    The operation is idempotent - if the framework is already loaded, it will not be loaded again.
 
     Args:
         framework_path: Explicit path to framework binary (mutually exclusive with framework_name)
-        framework_name: Named framework like "xcdb" (mutually exclusive with framework_path)
+        framework_name: Named framework from bundled/dev locations (mutually exclusive with framework_path)
 
     Returns:
         JSON string with load result details
@@ -37,8 +36,8 @@ async def lldb_load_framework(
         LLDBError: If framework loading fails
 
     Examples:
-        Load by explicit path: lldb_load_framework(framework_path="/path/to/xcdb.framework/xcdb")
-        Load xcdb by name: lldb_load_framework(framework_name="xcdb")
+        Load by explicit path: lldb_load_framework(framework_path="/path/to/myframework.framework/myframework")
+        Load by name: lldb_load_framework(framework_name="myframework")
     """
     logger.info(f"Loading framework: path={framework_path}, name={framework_name}")
 

@@ -781,7 +781,7 @@ class LLDBDebuggerManager:
 
         Args:
             framework_path: Explicit path to framework binary (mutually exclusive with framework_name)
-            framework_name: Named framework like "xcdb" (mutually exclusive with framework_path)
+            framework_name: Named framework to load from bundled/dev locations (mutually exclusive with framework_path)
 
         Returns:
             Dictionary with {success: bool, address: int, already_loaded: bool, message: str}
@@ -807,14 +807,8 @@ class LLDBDebuggerManager:
                 resolved_path = framework_path
                 framework_filename = os.path.basename(framework_path)
             elif framework_name:
-                # Only "xcdb" is supported for now
-                if framework_name.lower() != "xcdb":
-                    raise ValueError(f"Unknown framework name: {framework_name}. Only 'xcdb' is supported")
-
-                resolved_path = resolve_framework_path(
-                    framework_name,
-                    self._config.xcdb_framework_path if self._config else None
-                )
+                # Resolve framework by name
+                resolved_path = resolve_framework_path(framework_name)
                 framework_filename = framework_name
 
             # Check if framework already loaded
