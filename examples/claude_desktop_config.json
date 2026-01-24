@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "appledb": {
+      "command": "python3",
+      "args": ["-m", "appledb_mcp"],
+      "env": {
+        "APPLEDB_AUTO_LOAD_XCDB": "true",
+        "APPLEDB_LOG_LEVEL": "INFO",
+        "APPLEDB_LLDB_TIMEOUT": "30"
+      }
+    }
+  }
+}
