@@ -887,13 +887,13 @@ class LLDBDebuggerManager:
             if not thread.IsValid():
                 continue
 
-            # Get thread state
-            thread_state = thread.GetState()
-            state_str = "running" if thread_state == lldb.eStateRunning else "stopped"
+            # Get thread state - use process state since threads follow process state
+            process_state = process.GetState()
+            state_str = "running" if process_state == lldb.eStateRunning else "stopped"
 
             # Get stop reason if thread is stopped
             stop_reason = ""
-            if thread_state == lldb.eStateStopped:
+            if process_state == lldb.eStateStopped:
                 stop_reason = thread.GetStopDescription(256) or ""
 
             # Get thread name
