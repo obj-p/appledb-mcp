@@ -23,6 +23,7 @@ MANIFEST
 
 # Virtual environments
 venv/
+venv-mcp/
 ENV/
 env/
 .venv
@@ -50,3 +51,6 @@ Thumbs.db
 frameworks/*.framework
 !frameworks/.gitkeep
 *.log
+
+# Local configs (user-specific)
+claude_code_config.json
