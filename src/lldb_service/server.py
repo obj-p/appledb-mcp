@@ -6,6 +6,14 @@ import logging
 import sys
 from typing import Any, Callable, Dict
 
+from .utils.errors import (
+    FrameworkLoadError,
+    InvalidStateError,
+    LLDBError,
+    ProcessNotAttachedError,
+    ProcessNotFoundError,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -89,6 +97,28 @@ class JSONRPCServer:
                 logger.error(f"Timeout executing method: {method}")
                 return self._error_response(request_id, -32000, "Operation timeout")
 
+        # Custom LLDB exceptions
+        except LLDBError as e:
+            logger.error(f"LLDBError in request: {e}")
+            return self._error_response(request_id, -32000, str(e))
+
+        except ProcessNotAttachedError as e:
+            logger.error(f"ProcessNotAttachedError in request: {e}")
+            return self._error_response(request_id, -32001, str(e))
+
+        except InvalidStateError as e:
+            logger.error(f"InvalidStateError in request: {e}")
+            return self._error_response(request_id, -32002, str(e))
+
+        except ProcessNotFoundError as e:
+            logger.error(f"ProcessNotFoundError in request: {e}")
+            return self._error_response(request_id, -32003, str(e))
+
+        except FrameworkLoadError as e:
+            logger.error(f"FrameworkLoadError in request: {e}")
+            return self._error_response(request_id, -32004, str(e))
+
+        # Standard exceptions
         except ValueError as e:
             logger.error(f"ValueError in request: {e}")
             return self._error_response(request_id, -32602, f"Invalid params: {str(e)}")
