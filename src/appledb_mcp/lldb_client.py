@@ -221,11 +221,35 @@ class LLDBClient:
         env = os.environ.copy()
         # Ensure src/ is in PYTHONPATH for lldb_service import
         src_path = str(Path(__file__).parent.parent)
-        pythonpath = env.get("PYTHONPATH", "")
-        if pythonpath:
-            env["PYTHONPATH"] = f"{src_path}:{pythonpath}"
-        else:
-            env["PYTHONPATH"] = src_path
+        # Also add LLDB Python path for LLDB bindings (get from lldb -P)
+        try:
+            result = subprocess.run(
+                ["lldb", "-P"],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            if result.returncode == 0:
+                lldb_python_path = result.stdout.strip()
+                pythonpath = env.get("PYTHONPATH", "")
+                if pythonpath:
+                    env["PYTHONPATH"] = f"{src_path}:{lldb_python_path}:{pythonpath}"
+                else:
+                    env["PYTHONPATH"] = f"{src_path}:{lldb_python_path}"
+            else:
+                # Fallback: just use src_path
+                pythonpath = env.get("PYTHONPATH", "")
+                if pythonpath:
+                    env["PYTHONPATH"] = f"{src_path}:{pythonpath}"
+                else:
+                    env["PYTHONPATH"] = src_path
+        except Exception as e:
+            logger.warning(f"Could not get LLDB Python path: {e}, continuing anyway")
+            pythonpath = env.get("PYTHONPATH", "")
+            if pythonpath:
+                env["PYTHONPATH"] = f"{src_path}:{pythonpath}"
+            else:
+                env["PYTHONPATH"] = src_path
 
         self._ready.clear()  # Clear ready event before starting
 
@@ -664,7 +688,7 @@ class LLDBClient:
         Raises:
             ProcessNotAttachedError: If not attached
         """
-        result = await self._call("pause_execution", {})
+        result = await self._call("pause", {})
         return result.get("description", "paused") if isinstance(result, dict) else result
 
     async def step_over(self, thread_id: Optional[int] = None) -> str:
