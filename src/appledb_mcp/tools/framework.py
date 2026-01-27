@@ -41,6 +41,12 @@ async def lldb_load_framework(
     """
     logger.info(f"Loading framework: path={framework_path}, name={framework_name}")
 
+    # Validate inputs - must provide exactly one parameter
+    if not framework_path and not framework_name:
+        raise ValueError("Either 'framework_path' or 'framework_name' must be provided")
+    if framework_path and framework_name:
+        raise ValueError("Cannot specify both 'framework_path' and 'framework_name'")
+
     client = LLDBClient.get_instance()
     result = await client.load_framework(
         framework_path=framework_path,

@@ -47,3 +47,7 @@ class AppleDBConfig(BaseSettings):
         default=30.0,
         description="Timeout for RPC requests to LLDB service (seconds)"
     )
+    service_restart_reset_time: float = Field(
+        default=300.0,
+        description="Time in seconds of stable operation before resetting restart counter"
+    )

@@ -37,6 +37,15 @@ async def handle_initialize(params: Dict[str, Any]) -> Dict[str, Any]:
         RuntimeError: If LLDB is not available
     """
     config = params.get("config", {})
+
+    # Reconfigure logging with provided level
+    log_level = config.get("log_level", "INFO").upper()
+    if not hasattr(logging, log_level):
+        logger.warning(f"Invalid log level '{log_level}', using INFO")
+        log_level = "INFO"
+    logging.getLogger().setLevel(getattr(logging, log_level))
+    logger.info(f"Log level set to {log_level}")
+
     manager = LLDBDebuggerManager.get_instance()
 
     try:

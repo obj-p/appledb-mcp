@@ -62,6 +62,8 @@ class LLDBClient:
         self._pending_requests: Dict[int, Tuple[asyncio.Future, float]] = {}
         self._reader_task: Optional[asyncio.Task] = None
         self._stderr_task: Optional[asyncio.Task] = None
+        self._monitor_task: Optional[asyncio.Task] = None
+        self._reset_task: Optional[asyncio.Task] = None
         self._request_timeout: float = 30.0
 
         # Crash recovery and restart coordination
@@ -109,6 +111,10 @@ class LLDBClient:
         # Send initialize RPC to configure service
         config_dict = self._config_to_dict(config)
         await self._call("initialize", {"config": config_dict})
+
+        # Start restart counter reset task
+        self._last_restart = asyncio.get_event_loop().time()
+        self._reset_task = asyncio.create_task(self._reset_restart_counter_after_stable_period())
 
         logger.info("LLDB client initialized successfully")
 
@@ -192,7 +198,7 @@ class LLDBClient:
         logger.info("Starting LLDB service subprocess")
 
         # Step 1: Cancel and await old tasks
-        for task in [self._reader_task, self._stderr_task]:
+        for task in [self._reader_task, self._stderr_task, self._monitor_task, self._reset_task]:
             if task and not task.done():
                 task.cancel()
                 try:
@@ -237,6 +243,7 @@ class LLDBClient:
         # Step 4: Start reader tasks with error handling
         self._reader_task = asyncio.create_task(self._read_responses())
         self._stderr_task = asyncio.create_task(self._read_stderr())
+        self._monitor_task = asyncio.create_task(self._monitor_process())
 
         logger.info(f"Started LLDB service subprocess (PID: {self._process.pid})")
 
@@ -296,6 +303,46 @@ class LLDBClient:
                     logger.info(f"[LLDB-SERVICE] {log_msg}")
         except Exception as e:
             logger.error(f"Stderr reader failed: {e}")
+
+    async def _monitor_process(self) -> None:
+        """Monitor subprocess and trigger restart on unexpected exit
+
+        This task waits for the process to exit and triggers a restart
+        if it exits unexpectedly after successful initialization. This
+        provides faster crash detection than relying on EOF detection.
+        """
+        try:
+            returncode = await self._process.wait()
+            # Only trigger restart if process died after successful initialization
+            if returncode != 0 and self._ready.is_set():
+                logger.error(f"LLDB service exited unexpectedly (code: {returncode})")
+                await self._handle_subprocess_death()
+        except Exception as e:
+            logger.error(f"Process monitor failed: {e}")
+
+    async def _reset_restart_counter_after_stable_period(self) -> None:
+        """Reset restart counter after stable uptime period
+
+        This task monitors service uptime and resets the restart counter
+        after the service has been stable for the configured period. This
+        prevents permanent failure after transient crashes spread over time.
+        """
+        try:
+            while True:
+                await asyncio.sleep(60)  # Check every minute
+                if self._ready.is_set() and self._restart_count > 0:
+                    uptime = asyncio.get_event_loop().time() - self._last_restart
+                    reset_time = self._config.service_restart_reset_time
+                    if uptime > reset_time:
+                        logger.info(
+                            f"Resetting restart counter from {self._restart_count} "
+                            f"after {uptime:.0f}s stable operation"
+                        )
+                        self._restart_count = 0
+        except asyncio.CancelledError:
+            pass  # Expected on shutdown
+        except Exception as e:
+            logger.error(f"Restart counter reset task failed: {e}")
 
     async def _handle_response(self, response: dict) -> None:
         """Handle JSON-RPC response by resolving corresponding future
@@ -403,8 +450,13 @@ class LLDBClient:
                 "params": params,
             }
             line = json.dumps(request) + "\n"
-            self._process.stdin.write(line.encode())
-            await self._process.stdin.drain()
+            try:
+                self._process.stdin.write(line.encode())
+                await self._process.stdin.drain()
+            except BrokenPipeError:
+                logger.error("Subprocess stdin closed unexpectedly")
+                self._pending_requests.pop(request_id, None)
+                raise RuntimeError("LLDB service died during request")
 
             # Wait for response with timeout
             result = await asyncio.wait_for(future, timeout=timeout)
@@ -464,6 +516,9 @@ class LLDBClient:
         config_dict = self._config_to_dict(self._config)
         await self._call("initialize", {"config": config_dict})
 
+        # Update last restart timestamp for restart counter reset
+        self._last_restart = asyncio.get_event_loop().time()
+
         logger.info("LLDB service restarted successfully")
 
     def _cleanup_pending_requests(self, error_msg: str) -> None:
@@ -490,7 +545,7 @@ class LLDBClient:
             logger.warning(f"Cleanup RPC failed: {e}")
 
         # Step 2: Cancel background tasks
-        for task in [self._reader_task, self._stderr_task]:
+        for task in [self._reader_task, self._stderr_task, self._monitor_task, self._reset_task]:
             if task and not task.done():
                 task.cancel()
                 try:
@@ -743,13 +798,19 @@ class LLDBClient:
         if max_depth is not None:
             params["max_depth"] = max_depth
         result = await self._call("get_variables", params)
-        return result
+        # Handler returns {"variables": [...]}, extract the list
+        return result.get("variables", []) if isinstance(result, dict) else result
 
-    async def load_framework(self, framework_path: str) -> dict:
+    async def load_framework(
+        self,
+        framework_path: Optional[str] = None,
+        framework_name: Optional[str] = None,
+    ) -> dict:
         """Load framework into process
 
         Args:
-            framework_path: Path to framework
+            framework_path: Path to framework (mutually exclusive with framework_name)
+            framework_name: Named framework to load (mutually exclusive with framework_path)
 
         Returns:
             Result dictionary with status
@@ -757,8 +818,14 @@ class LLDBClient:
         Raises:
             ProcessNotAttachedError: If not attached
             FrameworkLoadError: If load fails
+            ValueError: If neither or both parameters provided
         """
-        result = await self._call("load_framework", {"framework_path": framework_path})
+        params = {}
+        if framework_path is not None:
+            params["framework_path"] = framework_path
+        if framework_name is not None:
+            params["framework_name"] = framework_name
+        result = await self._call("load_framework", params)
         return result
 
     async def get_debugger_state(self) -> DebuggerState:

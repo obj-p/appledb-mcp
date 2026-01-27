@@ -1,43 +1,25 @@
-"""Custom exceptions for LLDB service"""
+"""Custom exceptions for LLDB service
 
+This module re-exports all error classes from the shared common.errors module.
+This maintains backward compatibility while using a single source of truth.
+"""
 
-class AppleDBError(Exception):
-    """Base exception for all appledb-mcp errors"""
+from common.errors import (
+    AppleDBError,
+    ConfigurationError,
+    FrameworkLoadError,
+    InvalidStateError,
+    LLDBError,
+    ProcessNotAttachedError,
+    ProcessNotFoundError,
+)
 
-    pass
-
-
-class LLDBError(AppleDBError):
-    """Error related to LLDB operations"""
-
-    pass
-
-
-class InvalidStateError(AppleDBError):
-    """Error when operation is invalid in current state"""
-
-    pass
-
-
-class ProcessNotFoundError(AppleDBError):
-    """Error when target process cannot be found"""
-
-    pass
-
-
-class ProcessNotAttachedError(AppleDBError):
-    """Error when operation requires attached process but none is attached"""
-
-    pass
-
-
-class FrameworkLoadError(AppleDBError):
-    """Error when loading a framework fails"""
-
-    pass
-
-
-class ConfigurationError(AppleDBError):
-    """Error in configuration"""
-
-    pass
+__all__ = [
+    "AppleDBError",
+    "LLDBError",
+    "InvalidStateError",
+    "ProcessNotFoundError",
+    "ProcessNotAttachedError",
+    "FrameworkLoadError",
+    "ConfigurationError",
+]
