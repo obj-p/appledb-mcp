@@ -1,11 +1,12 @@
 {
   "mcpServers": {
     "appledb": {
-      "command": "python3",
+      "command": "/path/to/your/venv/bin/python3",
       "args": ["-m", "appledb_mcp"],
       "env": {
         "APPLEDB_LOG_LEVEL": "INFO",
-        "APPLEDB_LLDB_TIMEOUT": "30"
+        "APPLEDB_LLDB_TIMEOUT": "30",
+        "APPLEDB_PYTHON_PATH": "/usr/bin/python3"
       }
     }
   }
