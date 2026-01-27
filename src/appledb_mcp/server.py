@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 from mcp.server.fastmcp import FastMCP
 
 from .config import AppleDBConfig
-from .debugger import LLDBDebuggerManager
+from .lldb_client import LLDBClient
 
 logger = logging.getLogger(__name__)
 
@@ -25,21 +25,21 @@ async def app_lifespan(server: FastMCP):
     config = AppleDBConfig()
     logger.info(f"Loaded configuration: log_level={config.log_level}")
 
-    # Initialize LLDB debugger
-    logger.info("Initializing LLDB debugger")
-    debugger_manager = LLDBDebuggerManager.get_instance()
+    # Initialize LLDB client
+    logger.info("Initializing LLDB client")
+    client = LLDBClient.get_instance()
     try:
-        debugger_manager.initialize(config)
+        await client.initialize(config)
     except RuntimeError as e:
-        logger.error(f"Failed to initialize LLDB: {e}")
+        logger.error(f"Failed to initialize LLDB client: {e}")
         raise
 
     try:
         yield
     finally:
         # Clean up on shutdown
-        logger.info("Shutting down LLDB debugger")
-        await debugger_manager.cleanup()
+        logger.info("Shutting down LLDB client")
+        await client.cleanup()
 
 
 # Create FastMCP server instance
@@ -54,14 +54,14 @@ from .tools import process, execution, inspection, framework  # noqa: E402, F401
 
 @mcp.tool()
 async def health_check() -> str:
-    """Check if the MCP server and LLDB debugger are healthy
+    """Check if the MCP server and LLDB service are healthy
 
     Returns:
         Health status message
     """
     try:
-        manager = LLDBDebuggerManager.get_instance()
-        debugger = manager.get_debugger()
-        return f"✓ MCP server running, LLDB debugger initialized (version: {debugger.GetVersionString()})"
+        client = LLDBClient.get_instance()
+        health = await client.ping()
+        return f"✓ MCP server running, LLDB service healthy (attached: {health['attached']}, state: {health['state']})"
     except Exception as e:
         return f"✗ Error: {str(e)}"

@@ -3,7 +3,7 @@
 import logging
 from typing import Dict, List, Optional
 
-from ..debugger import LLDBDebuggerManager
+from ..lldb_client import LLDBClient
 from ..server import mcp
 from .base import handle_tool_errors
 
@@ -40,15 +40,15 @@ async def lldb_attach_process(
     if pid and name:
         raise ValueError("Cannot specify both 'pid' and 'name'")
 
-    manager = LLDBDebuggerManager.get_instance()
+    client = LLDBClient.get_instance()
 
     # Attach by PID or name
     if pid:
         logger.info(f"Attaching to process by PID: {pid}")
-        result = await manager.attach_process_by_pid(pid)
+        result = await client.attach_process_by_pid(pid)
     else:
         logger.info(f"Attaching to process by name: {name}")
-        result = await manager.attach_process_by_name(name)
+        result = await client.attach_process_by_name(name)
 
     return (
         f"✓ Attached to process '{result.name}'\n"
@@ -88,8 +88,8 @@ async def lldb_launch_app(
     """
     logger.info(f"Launching application: {executable}")
 
-    manager = LLDBDebuggerManager.get_instance()
-    result = await manager.launch_app(
+    client = LLDBClient.get_instance()
+    result = await client.launch_app(
         executable=executable,
         args=args,
         env=env,
@@ -125,8 +125,8 @@ async def lldb_detach(kill: bool = False) -> str:
     """
     logger.info(f"Detaching from process (kill={kill})")
 
-    manager = LLDBDebuggerManager.get_instance()
-    await manager.detach(kill=kill)
+    client = LLDBClient.get_instance()
+    await client.detach(kill=kill)
 
     action = "killed" if kill else "detached from"
     return f"✓ Successfully {action} process"

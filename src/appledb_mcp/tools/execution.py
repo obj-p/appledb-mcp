@@ -3,7 +3,7 @@
 import logging
 from typing import Optional
 
-from ..debugger import LLDBDebuggerManager
+from ..lldb_client import LLDBClient
 from ..server import mcp
 from .base import handle_tool_errors
 
@@ -30,8 +30,8 @@ async def lldb_continue() -> str:
     """
     logger.info("Continuing execution")
 
-    manager = LLDBDebuggerManager.get_instance()
-    result = await manager.continue_execution()
+    client = LLDBClient.get_instance()
+    result = await client.continue_execution()
 
     return f"✓ Execution continued\n  State: {result}"
 
@@ -56,8 +56,8 @@ async def lldb_pause() -> str:
     """
     logger.info("Pausing execution")
 
-    manager = LLDBDebuggerManager.get_instance()
-    result = await manager.pause_execution()
+    client = LLDBClient.get_instance()
+    result = await client.pause_execution()
 
     return f"✓ Execution paused\n{result}"
 
@@ -87,8 +87,8 @@ async def lldb_step_over(thread_id: Optional[int] = None) -> str:
     """
     logger.info(f"Stepping over (thread_id={thread_id})")
 
-    manager = LLDBDebuggerManager.get_instance()
-    result = await manager.step_over(thread_id=thread_id)
+    client = LLDBClient.get_instance()
+    result = await client.step_over(thread_id=thread_id)
 
     return f"✓ Stepped over\n{result}"
 
@@ -118,8 +118,8 @@ async def lldb_step_into(thread_id: Optional[int] = None) -> str:
     """
     logger.info(f"Stepping into (thread_id={thread_id})")
 
-    manager = LLDBDebuggerManager.get_instance()
-    result = await manager.step_into(thread_id=thread_id)
+    client = LLDBClient.get_instance()
+    result = await client.step_into(thread_id=thread_id)
 
     return f"✓ Stepped into\n{result}"
 
@@ -149,7 +149,7 @@ async def lldb_step_out(thread_id: Optional[int] = None) -> str:
     """
     logger.info(f"Stepping out (thread_id={thread_id})")
 
-    manager = LLDBDebuggerManager.get_instance()
-    result = await manager.step_out(thread_id=thread_id)
+    client = LLDBClient.get_instance()
+    result = await client.step_out(thread_id=thread_id)
 
     return f"✓ Stepped out\n{result}"

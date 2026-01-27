@@ -3,7 +3,7 @@
 import logging
 from typing import Optional
 
-from ..debugger import LLDBDebuggerManager
+from ..lldb_client import LLDBClient
 from ..server import mcp
 from .base import handle_tool_errors
 
@@ -43,8 +43,8 @@ async def lldb_evaluate(
     """
     logger.info(f"Evaluating expression: {expression} (language={language}, frame_index={frame_index})")
 
-    manager = LLDBDebuggerManager.get_instance()
-    result = await manager.evaluate_expression(
+    client = LLDBClient.get_instance()
+    result = await client.evaluate_expression(
         expression=expression,
         language=language,
         frame_index=frame_index,
@@ -92,8 +92,8 @@ async def lldb_get_backtrace(
     """
     logger.info(f"Getting backtrace (thread_id={thread_id}, max_frames={max_frames})")
 
-    manager = LLDBDebuggerManager.get_instance()
-    frames = await manager.get_backtrace(
+    client = LLDBClient.get_instance()
+    frames = await client.get_backtrace(
         thread_id=thread_id,
         max_frames=max_frames,
     )
@@ -148,8 +148,8 @@ async def lldb_get_variables(
     """
     logger.info(f"Getting variables (frame_index={frame_index}, args={include_arguments}, locals={include_locals})")
 
-    manager = LLDBDebuggerManager.get_instance()
-    variables = await manager.get_variables(
+    client = LLDBClient.get_instance()
+    variables = await client.get_variables(
         frame_index=frame_index,
         include_arguments=include_arguments,
         include_locals=include_locals,

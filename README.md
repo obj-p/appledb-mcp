@@ -2,6 +2,28 @@
 
 An MCP (Model Context Protocol) server that exposes LLDB debugging capabilities for iOS and macOS applications.
 
+## Architecture
+
+AppleDB uses a **two-server architecture** to handle Python version compatibility:
+
+```
+Claude Code → MCP Server (Python 3.10+) → LLDBClient → [subprocess] → LLDB Service (Python 3.9) → LLDB
+```
+
+**Components:**
+- **MCP Server**: Runs with Python 3.10+ (required by MCP SDK), provides 12 debugging tools via MCP protocol
+- **LLDB Service**: Standalone subprocess running Python 3.9 with LLDB, communicates via JSON-RPC over stdin/stdout
+- **LLDBClient**: Manages subprocess lifecycle, handles JSON-RPC communication, provides automatic crash recovery
+
+**Why Two Servers?**
+MCP SDK requires Python 3.10+, while LLDB bindings are only available with macOS system Python (typically 3.9). This architecture allows the MCP server to use a modern Python version while the LLDB service uses the system Python with LLDB bindings.
+
+**Environment Setup:**
+For the MCP server to find the LLDB service, ensure `src/` is in PYTHONPATH:
+```bash
+export PYTHONPATH="${PWD}/src:${PYTHONPATH}"
+```
+
 ## Features
 
 - **Process Management**: Attach to running processes or launch apps for debugging

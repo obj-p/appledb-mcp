@@ -19,6 +19,12 @@ class ProcessNotAttachedError(LLDBError):
     pass
 
 
+class ProcessNotFoundError(LLDBError):
+    """Process not found"""
+
+    pass
+
+
 class InvalidStateError(AppleDBError):
     """Operation invalid for current process state"""
 

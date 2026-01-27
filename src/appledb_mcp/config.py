@@ -29,3 +29,21 @@ class AppleDBConfig(BaseSettings):
     max_variable_depth: int = Field(
         default=3, description="Maximum depth for variable inspection"
     )
+
+    # Subprocess management
+    python_path: str = Field(
+        default="python3",
+        description="Path to Python 3.9+ interpreter for LLDB service"
+    )
+    service_max_restarts: int = Field(
+        default=3,
+        description="Maximum automatic restarts on service crash"
+    )
+    service_restart_backoff: float = Field(
+        default=1.0,
+        description="Base backoff time (seconds) for restart exponential backoff"
+    )
+    service_request_timeout: float = Field(
+        default=30.0,
+        description="Timeout for RPC requests to LLDB service (seconds)"
+    )

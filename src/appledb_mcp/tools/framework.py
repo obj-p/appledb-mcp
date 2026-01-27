@@ -4,7 +4,7 @@ import json
 import logging
 from typing import Optional
 
-from ..debugger import LLDBDebuggerManager
+from ..lldb_client import LLDBClient
 from ..server import mcp
 from .base import handle_tool_errors
 
@@ -41,8 +41,8 @@ async def lldb_load_framework(
     """
     logger.info(f"Loading framework: path={framework_path}, name={framework_name}")
 
-    manager = LLDBDebuggerManager.get_instance()
-    result = await manager.load_framework(
+    client = LLDBClient.get_instance()
+    result = await client.load_framework(
         framework_path=framework_path,
         framework_name=framework_name
     )
