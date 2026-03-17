@@ -1,80 +1,49 @@
 # appledb-mcp
 
-An MCP (Model Context Protocol) server that exposes LLDB debugging capabilities for iOS and macOS applications.
+An LLDB debugger bridge for iOS and macOS — works as both an MCP server and a standalone CLI (ADB-style).
 
 ## Architecture
 
-AppleDB uses a **two-server architecture** to handle Python version compatibility:
-
 ```
-Claude Code → MCP Server (Python 3.10+) → LLDBClient → [subprocess] → LLDB Service (Python 3.9) → LLDB
+                     ┌──────────────────────────────┐
+                     │  LLDB Server (persistent)     │
+                     │  Python 3.9 + LLDB bindings   │
+                     │  TCP port 5037 (default)       │
+                     │  JSON-RPC over TCP             │
+                     └──────────┬───────────────────┘
+                                │
+               ┌────────────────┼────────────────┐
+               │                │                 │
+         ┌─────┴─────┐  ┌──────┴──────┐  ┌──────┴──────┐
+         │  CLI       │  │  CLI        │  │  MCP Server │
+         │ (attach)   │  │ (bt)        │  │  (Python    │
+         │ ephemeral  │  │ ephemeral   │  │   3.10+)    │
+         └───────────┘  └─────────────┘  └─────────────┘
 ```
 
-**Components:**
-- **MCP Server**: Runs with Python 3.10+ (required by MCP SDK), provides 12 debugging tools via MCP protocol
-- **LLDB Service**: Standalone subprocess running Python 3.9 with LLDB, communicates via JSON-RPC over stdin/stdout
-- **LLDBClient**: Manages subprocess lifecycle, handles JSON-RPC communication, provides automatic crash recovery
+**LLDB Server**: Persistent daemon (like ADB server) running on a known TCP port. Maintains all debugging state — attached processes, breakpoints, threads. Uses Python 3.9 with LLDB bindings.
 
-**Why Two Servers?**
-MCP SDK requires Python 3.10+, while LLDB bindings are only available with macOS system Python (typically 3.9). This architecture allows the MCP server to use a modern Python version while the LLDB service uses the system Python with LLDB bindings.
+**CLI**: Ephemeral commands that connect to the server, send a request, print the result, and exit. Auto-starts the server if not running.
 
-**Environment Setup:**
-For the MCP server to find the LLDB service, ensure `src/` is in PYTHONPATH:
-```bash
-export PYTHONPATH="${PWD}/src:${PYTHONPATH}"
-```
+**MCP Server**: Runs with Python 3.10+ (MCP SDK requirement). Can operate standalone (spawns its own LLDB subprocess) or connect to the persistent server.
 
 ## Features
 
 - **Process Management**: Attach to running processes or launch apps for debugging
-- **Execution Control**: Continue, step over, step into, step out
-- **Expression Evaluation**: Execute Swift, Objective-C, and C++ expressions in the debugger
-- **Framework Loading**: Dynamic framework injection for runtime modifications
-- **State Inspection**: Variables, backtraces, process state
+- **Execution Control**: Continue, pause, step over/into/out
+- **Expression Evaluation**: Swift, Objective-C, C++, and C expressions
+- **LLDB Command Passthrough**: Run any LLDB command directly
+- **Breakpoint Management**: Set, list, and delete breakpoints
+- **Thread Inspection**: List threads, backtraces, variables
+- **Framework Loading**: Dynamic framework injection
 
 ## Requirements
 
 - **macOS** 12.0 or higher
 - **Python** 3.10 or higher
-- **Xcode Command Line Tools** (provides LLDB and Python bindings)
-
-### LLDB Availability
-
-This project requires LLDB Python bindings, which come with Xcode Command Line Tools.
-
-**Step 1:** Install Xcode Command Line Tools (if not already installed):
-```bash
-xcode-select --install
-```
-
-**Step 2:** Verify LLDB is available:
-```bash
-lldb --version
-```
-
-You should see output like: `lldb-1703.0.236.21` or similar.
-
-**Step 3:** Test LLDB Python bindings:
-```bash
-python3 -c "import lldb; print('LLDB available')"
-```
-
-If this succeeds, you're ready to install appledb-mcp.
-
-### Troubleshooting LLDB
-
-If `import lldb` fails, ensure you're using system Python or set PYTHONPATH:
-
-```bash
-export PYTHONPATH=$(lldb -P):$PYTHONPATH
-python3 -c "import lldb; print('LLDB available')"
-```
-
-**Note**: LLDB Python bindings may not work in virtual environments. Use system Python 3.10+ or install the package globally.
+- **Xcode Command Line Tools** (`xcode-select --install`)
 
 ## Installation
-
-### From Source
 
 ```bash
 git clone https://github.com/obj-p/appledb-mcp.git
@@ -82,29 +51,62 @@ cd appledb-mcp
 pip install -e .
 ```
 
-**Verify Installation:**
-```bash
-python3 -c "from appledb_mcp.server import mcp; print('✓ appledb-mcp installed successfully')"
-```
-
-### Development Installation
+## CLI Usage
 
 ```bash
-pip install -e ".[dev]"
+# Server management
+appledb start-server              # Start LLDB server daemon
+appledb server-status             # Check if server is running
+appledb kill-server               # Stop the server
+
+# Process management (auto-starts server if needed)
+appledb attach 1234               # Attach by PID
+appledb attach -n Safari          # Attach by name
+appledb launch /path/to/app       # Launch app for debugging
+appledb detach                    # Detach from process
+appledb detach --kill             # Kill process
+
+# Debugging
+appledb status                    # Show debugger state
+appledb continue                  # Continue execution
+appledb pause                     # Pause execution
+appledb step over                 # Step over/into/out
+
+# Inspection
+appledb eval "myVariable"         # Evaluate expression
+appledb eval "self" --lang swift  # With language hint
+appledb bt                        # Show backtrace
+appledb vars                      # Show variables
+appledb threads                   # List threads
+
+# Breakpoints
+appledb bp set main.c:42          # Set by file:line
+appledb bp set viewDidLoad        # Set by symbol
+appledb bp set malloc -c '$arg1 > 1024'  # With condition
+appledb bp list                   # List breakpoints
+appledb bp delete 1               # Delete breakpoint
+
+# Raw LLDB commands
+appledb cmd register read         # Any LLDB command
+appledb cmd memory read 0x100
+
+# MCP mode
+appledb mcp                       # Run as MCP server (stdio)
 ```
 
-**Run Tests:**
-```bash
-pytest tests/
-```
+### Port Discovery
 
-## Usage
+The CLI finds the server port in this order:
+1. `--port` flag
+2. `APPLEDB_PORT` environment variable
+3. `~/.appledb/server.port` file (written by `start-server`)
+4. Default: `5037`
+
+## MCP Usage
 
 ### With Claude Desktop
 
-Add to your Claude Desktop configuration file:
-
-**macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
+Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 
 ```json
 {
@@ -120,140 +122,70 @@ Add to your Claude Desktop configuration file:
 }
 ```
 
-Restart Claude Desktop after updating the configuration.
+### Available MCP Tools
 
-### Standalone
-
-```bash
-python3 -m appledb_mcp
-```
+| Category | Tools |
+|----------|-------|
+| **Process** | `health_check`, `lldb_attach_process`, `lldb_launch_app`, `lldb_detach` |
+| **Execution** | `lldb_continue`, `lldb_pause`, `lldb_step_over`, `lldb_step_into`, `lldb_step_out` |
+| **Inspection** | `lldb_evaluate`, `lldb_get_backtrace`, `lldb_get_variables`, `lldb_list_threads` |
+| **Breakpoints** | `lldb_set_breakpoint`, `lldb_list_breakpoints`, `lldb_delete_breakpoint` |
+| **Command** | `lldb_command` (raw LLDB passthrough) |
+| **Framework** | `lldb_load_framework` |
 
 ## Configuration
-
-Configuration is done via environment variables:
 
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `APPLEDB_LOG_LEVEL` | Logging level (DEBUG, INFO, WARNING, ERROR) | `INFO` |
 | `APPLEDB_LLDB_TIMEOUT` | Timeout for LLDB operations (seconds) | `30` |
-
-## Available MCP Tools
-
-### Process Management
-- `health_check` - Check server health and LLDB status
-- `lldb_attach_process` - Attach to a running process by PID or name
-- `lldb_launch_app` - Launch an app with debugging
-- `lldb_detach` - Detach from the current process
-
-### Execution Control
-- `lldb_continue` - Continue execution
-- `lldb_pause` - Pause execution
-- `lldb_step_over` - Step over
-- `lldb_step_into` - Step into
-- `lldb_step_out` - Step out
-
-### Inspection
-- `lldb_evaluate` - Evaluate expressions (supports Swift, Objective-C, C++, C)
-- `lldb_get_backtrace` - Get stack trace for thread
-- `lldb_get_variables` - Get local variables and arguments in frame
-
-### Framework Loading
-- `lldb_load_framework` - Load custom frameworks dynamically
+| `APPLEDB_PYTHON_PATH` | Path to Python 3.9+ for LLDB service | `python3` |
+| `APPLEDB_PORT` | TCP port for server | `5037` |
+| `APPLEDB_SERVICE_MAX_RESTARTS` | Max automatic subprocess restarts | `3` |
+| `APPLEDB_SERVICE_RESTART_BACKOFF` | Base restart backoff (seconds) | `1.0` |
+| `APPLEDB_SERVICE_REQUEST_TIMEOUT` | RPC request timeout (seconds) | `30.0` |
+| `APPLEDB_SERVICE_RESTART_RESET_TIME` | Stable uptime before restart counter reset | `300.0` |
+| `APPLEDB_MAX_BACKTRACE_FRAMES` | Max frames in backtrace | `100` |
+| `APPLEDB_MAX_VARIABLE_DEPTH` | Max depth for variable inspection | `3` |
 
 ## Development
 
-### Running Tests
-
 ```bash
-# Unit tests (fast, no LLDB required)
-pytest tests/
+pip install -e ".[dev]"
 
-# Integration tests (require LLDB)
-pytest tests/ -m integration
-```
+# Unit tests (no LLDB required)
+pytest tests/ -v --ignore=tests/lldb_service
 
-### Code Formatting
+# Integration tests (require LLDB + running server)
+pytest tests/ -v -m integration
 
-```bash
+# Formatting and linting
 black src/ tests/
 ruff check src/ tests/
-```
-
-### Type Checking
-
-```bash
 mypy src/appledb_mcp
 ```
-
-## Project Status
-
-**Current Version**: 0.1.0 (Phase 4: Inspection Tools)
-
-- ✅ Core MCP server infrastructure
-- ✅ LLDB debugger singleton management
-- ✅ Configuration system
-- ✅ Logging and error handling
-- ✅ Process management tools (Phase 2)
-- ✅ Execution control tools (Phase 3)
-- ✅ Inspection tools (Phase 4)
-- 🚧 Framework loading (Phase 5)
-- 🚧 Resources (Phase 6)
 
 ## Troubleshooting
 
 ### "ModuleNotFoundError: No module named 'lldb'"
 
-**Cause**: LLDB Python bindings not available in current Python environment.
-
-**Solutions**:
-1. Install Xcode Command Line Tools: `xcode-select --install`
-2. Use system Python instead of virtual environment
-3. Set PYTHONPATH: `export PYTHONPATH=$(lldb -P):$PYTHONPATH`
-
-### "RuntimeError: LLDB not found"
-
-**Cause**: LLDB module cannot be imported at runtime.
-
-**Solution**: The error message will include the exact PYTHONPATH to add:
+Install Xcode Command Line Tools and set PYTHONPATH:
 ```bash
-export PYTHONPATH=/Applications/Xcode.app/Contents/SharedFrameworks/LLDB.framework/Resources/Python:$PYTHONPATH
+xcode-select --install
+export PYTHONPATH=$(lldb -P):$PYTHONPATH
 ```
-
-### Tests Failing in Virtual Environment
-
-**Cause**: LLDB Python bindings don't work in venv.
-
-**Solution**: Run tests with system Python and PYTHONPATH:
-```bash
-PYTHONPATH=$(lldb -P) python3 -m pytest tests/
-```
-
-### Claude Desktop Connection Issues
-
-**Symptoms**: Tools not appearing or server not starting.
-
-**Solutions**:
-1. Check logs: `~/Library/Logs/Claude/mcp*.log`
-2. Verify config: `~/Library/Application Support/Claude/claude_desktop_config.json`
-3. Restart Claude Desktop completely
-4. Test server manually: `python3 -m appledb_mcp`
 
 ### Permission Denied When Attaching
 
-**Cause**: macOS requires debugging permissions.
+macOS requires debugging permissions. Options:
+1. Sign binary for debugging (recommended)
+2. Use Xcode to grant permissions
+3. `sudo appledb attach <pid>` (not recommended)
 
-**Solutions**:
-1. Run with sudo (not recommended): `sudo python3 -m appledb_mcp`
-2. Sign binary for debugging (recommended for development)
-3. Use Xcode to grant permissions
-4. Disable SIP (not recommended): Only for development machines
+### Server Won't Start
 
-## Compatibility
-
-- **Tested on**: macOS 14+ (Sonoma), Xcode 15+
-- **LLDB Versions**: lldb-1703+ (uses standard LLDB API)
-- **Python Versions**: 3.10, 3.11, 3.12, 3.14
-- **Platforms**: macOS (primary), iOS Simulator (tested), Physical iOS devices (should work)
+Check logs: `appledb start-server --log-level DEBUG`
+Verify LLDB: `python3 -c "import lldb; print('OK')"`
 
 ## License
 

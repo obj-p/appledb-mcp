@@ -8,32 +8,32 @@ from appledb_mcp.utils.errors import InvalidStateError, ProcessNotAttachedError
 
 
 @pytest.fixture
-def mock_manager():
-    """Mock debugger manager"""
-    with patch("appledb_mcp.tools.execution.LLDBDebuggerManager.get_instance") as mock:
-        manager = MagicMock()
-        mock.return_value = manager
-        yield manager
+def mock_client():
+    """Mock LLDB client"""
+    with patch("appledb_mcp.tools.execution.LLDBClient") as mock_cls:
+        client = MagicMock()
+        mock_cls.get_instance.return_value = client
+        yield client
 
 
 class TestContinue:
     """Tests for lldb_continue tool"""
 
     @pytest.mark.asyncio
-    async def test_continue_success(self, mock_manager):
+    async def test_continue_success(self, mock_client):
         """Test successful continue"""
-        mock_manager.continue_execution = AsyncMock(return_value="running")
+        mock_client.continue_execution = AsyncMock(return_value="running")
 
         result = await execution.lldb_continue()
 
         assert "✓ Execution continued" in result
         assert "running" in result
-        mock_manager.continue_execution.assert_called_once()
+        mock_client.continue_execution.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_continue_not_stopped(self, mock_manager):
+    async def test_continue_not_stopped(self, mock_client):
         """Test continue when not stopped"""
-        mock_manager.continue_execution = AsyncMock(
+        mock_client.continue_execution = AsyncMock(
             side_effect=InvalidStateError("Cannot continue: process is not stopped (state: running)")
         )
 
@@ -43,9 +43,9 @@ class TestContinue:
         assert "not stopped" in result
 
     @pytest.mark.asyncio
-    async def test_continue_not_attached(self, mock_manager):
+    async def test_continue_not_attached(self, mock_client):
         """Test continue when not attached"""
-        mock_manager.continue_execution = AsyncMock(
+        mock_client.continue_execution = AsyncMock(
             side_effect=ProcessNotAttachedError("No process attached")
         )
 
@@ -59,9 +59,9 @@ class TestPause:
     """Tests for lldb_pause tool"""
 
     @pytest.mark.asyncio
-    async def test_pause_success(self, mock_manager):
+    async def test_pause_success(self, mock_client):
         """Test successful pause"""
-        mock_manager.pause_execution = AsyncMock(
+        mock_client.pause_execution = AsyncMock(
             return_value="Stop reason: signal\nLocation: main at test.c:10"
         )
 
@@ -69,12 +69,12 @@ class TestPause:
 
         assert "✓ Execution paused" in result
         assert "Stop reason:" in result
-        mock_manager.pause_execution.assert_called_once()
+        mock_client.pause_execution.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_pause_not_running(self, mock_manager):
+    async def test_pause_not_running(self, mock_client):
         """Test pause when not running"""
-        mock_manager.pause_execution = AsyncMock(
+        mock_client.pause_execution = AsyncMock(
             side_effect=InvalidStateError("Cannot pause: process is not running (state: stopped)")
         )
 
@@ -84,9 +84,9 @@ class TestPause:
         assert "not running" in result
 
     @pytest.mark.asyncio
-    async def test_pause_not_attached(self, mock_manager):
+    async def test_pause_not_attached(self, mock_client):
         """Test pause when not attached"""
-        mock_manager.pause_execution = AsyncMock(
+        mock_client.pause_execution = AsyncMock(
             side_effect=ProcessNotAttachedError("No process attached")
         )
 
@@ -100,9 +100,9 @@ class TestStepOver:
     """Tests for lldb_step_over tool"""
 
     @pytest.mark.asyncio
-    async def test_step_over_success(self, mock_manager):
+    async def test_step_over_success(self, mock_client):
         """Test successful step over"""
-        mock_manager.step_over = AsyncMock(
+        mock_client.step_over = AsyncMock(
             return_value="Location: func at file.c:42"
         )
 
@@ -110,24 +110,24 @@ class TestStepOver:
 
         assert "✓ Stepped over" in result
         assert "Location:" in result
-        mock_manager.step_over.assert_called_once_with(thread_id=None)
+        mock_client.step_over.assert_called_once_with(thread_id=None)
 
     @pytest.mark.asyncio
-    async def test_step_over_with_thread_id(self, mock_manager):
+    async def test_step_over_with_thread_id(self, mock_client):
         """Test step over with specific thread ID"""
-        mock_manager.step_over = AsyncMock(
+        mock_client.step_over = AsyncMock(
             return_value="Location: func at file.c:42"
         )
 
         result = await execution.lldb_step_over(thread_id=123)
 
         assert "✓ Stepped over" in result
-        mock_manager.step_over.assert_called_once_with(thread_id=123)
+        mock_client.step_over.assert_called_once_with(thread_id=123)
 
     @pytest.mark.asyncio
-    async def test_step_over_not_stopped(self, mock_manager):
+    async def test_step_over_not_stopped(self, mock_client):
         """Test step over when not stopped"""
-        mock_manager.step_over = AsyncMock(
+        mock_client.step_over = AsyncMock(
             side_effect=InvalidStateError("Cannot step: process is not stopped")
         )
 
@@ -137,9 +137,9 @@ class TestStepOver:
         assert "not stopped" in result
 
     @pytest.mark.asyncio
-    async def test_step_over_invalid_thread(self, mock_manager):
+    async def test_step_over_invalid_thread(self, mock_client):
         """Test step over with invalid thread ID"""
-        mock_manager.step_over = AsyncMock(
+        mock_client.step_over = AsyncMock(
             side_effect=ValueError("Invalid thread ID: 999")
         )
 
@@ -153,9 +153,9 @@ class TestStepInto:
     """Tests for lldb_step_into tool"""
 
     @pytest.mark.asyncio
-    async def test_step_into_success(self, mock_manager):
+    async def test_step_into_success(self, mock_client):
         """Test successful step into"""
-        mock_manager.step_into = AsyncMock(
+        mock_client.step_into = AsyncMock(
             return_value="Location: inner_func at file.c:10"
         )
 
@@ -163,24 +163,24 @@ class TestStepInto:
 
         assert "✓ Stepped into" in result
         assert "Location:" in result
-        mock_manager.step_into.assert_called_once_with(thread_id=None)
+        mock_client.step_into.assert_called_once_with(thread_id=None)
 
     @pytest.mark.asyncio
-    async def test_step_into_with_thread_id(self, mock_manager):
+    async def test_step_into_with_thread_id(self, mock_client):
         """Test step into with specific thread ID"""
-        mock_manager.step_into = AsyncMock(
+        mock_client.step_into = AsyncMock(
             return_value="Location: inner_func at file.c:10"
         )
 
         result = await execution.lldb_step_into(thread_id=456)
 
         assert "✓ Stepped into" in result
-        mock_manager.step_into.assert_called_once_with(thread_id=456)
+        mock_client.step_into.assert_called_once_with(thread_id=456)
 
     @pytest.mark.asyncio
-    async def test_step_into_not_stopped(self, mock_manager):
+    async def test_step_into_not_stopped(self, mock_client):
         """Test step into when not stopped"""
-        mock_manager.step_into = AsyncMock(
+        mock_client.step_into = AsyncMock(
             side_effect=InvalidStateError("Cannot step: process is not stopped")
         )
 
@@ -194,9 +194,9 @@ class TestStepOut:
     """Tests for lldb_step_out tool"""
 
     @pytest.mark.asyncio
-    async def test_step_out_success(self, mock_manager):
+    async def test_step_out_success(self, mock_client):
         """Test successful step out"""
-        mock_manager.step_out = AsyncMock(
+        mock_client.step_out = AsyncMock(
             return_value="Location: caller at file.c:20"
         )
 
@@ -204,24 +204,24 @@ class TestStepOut:
 
         assert "✓ Stepped out" in result
         assert "Location:" in result
-        mock_manager.step_out.assert_called_once_with(thread_id=None)
+        mock_client.step_out.assert_called_once_with(thread_id=None)
 
     @pytest.mark.asyncio
-    async def test_step_out_with_thread_id(self, mock_manager):
+    async def test_step_out_with_thread_id(self, mock_client):
         """Test step out with specific thread ID"""
-        mock_manager.step_out = AsyncMock(
+        mock_client.step_out = AsyncMock(
             return_value="Location: caller at file.c:20"
         )
 
         result = await execution.lldb_step_out(thread_id=789)
 
         assert "✓ Stepped out" in result
-        mock_manager.step_out.assert_called_once_with(thread_id=789)
+        mock_client.step_out.assert_called_once_with(thread_id=789)
 
     @pytest.mark.asyncio
-    async def test_step_out_not_stopped(self, mock_manager):
+    async def test_step_out_not_stopped(self, mock_client):
         """Test step out when not stopped"""
-        mock_manager.step_out = AsyncMock(
+        mock_client.step_out = AsyncMock(
             side_effect=InvalidStateError("Cannot step: process is not stopped")
         )
 

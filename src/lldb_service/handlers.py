@@ -401,6 +401,62 @@ async def handle_cleanup(params: Dict[str, Any]) -> Dict[str, Any]:
     return {"success": True}
 
 
+async def handle_execute_command(params: Dict[str, Any]) -> Dict[str, Any]:
+    """Handle execute_command RPC call.
+
+    Args:
+        params: {"command": str}
+
+    Returns:
+        {"output": str, "error": str, "success": bool}
+
+    Raises:
+        ValueError: If command not provided
+    """
+    command = params.get("command")
+    if not command:
+        raise ValueError("'command' parameter required")
+    manager = LLDBDebuggerManager.get_instance()
+    return await manager.execute_command(command)
+
+
+async def handle_set_breakpoint(params: Dict[str, Any]) -> Dict[str, Any]:
+    """Handle set_breakpoint RPC call."""
+    manager = LLDBDebuggerManager.get_instance()
+    result = await manager.set_breakpoint(
+        file=params.get("file"),
+        line=params.get("line"),
+        symbol=params.get("symbol"),
+        module=params.get("module"),
+        condition=params.get("condition"),
+    )
+    return result.model_dump()
+
+
+async def handle_list_breakpoints(params: Dict[str, Any]) -> Dict[str, Any]:
+    """Handle list_breakpoints RPC call."""
+    manager = LLDBDebuggerManager.get_instance()
+    breakpoints = await manager.list_breakpoints()
+    return {"breakpoints": [bp.model_dump() for bp in breakpoints]}
+
+
+async def handle_delete_breakpoint(params: Dict[str, Any]) -> Dict[str, Any]:
+    """Handle delete_breakpoint RPC call."""
+    breakpoint_id = params.get("breakpoint_id")
+    if breakpoint_id is None:
+        raise ValueError("'breakpoint_id' parameter required")
+    manager = LLDBDebuggerManager.get_instance()
+    await manager.delete_breakpoint(breakpoint_id)
+    return {"success": True}
+
+
+async def handle_list_threads(params: Dict[str, Any]) -> Dict[str, Any]:
+    """Handle list_threads RPC call."""
+    manager = LLDBDebuggerManager.get_instance()
+    threads = await manager.get_all_threads()
+    return {"threads": [t.model_dump() for t in threads]}
+
+
 # Error code mapping for JSON-RPC errors
 ERROR_CODE_MAP = {
     LLDBError: -32000,

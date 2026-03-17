@@ -168,3 +168,27 @@ async def lldb_get_variables(
             output += f"\n    Summary: {var['summary']}"
 
     return output
+
+
+@mcp.tool()
+@handle_tool_errors
+async def lldb_list_threads() -> str:
+    """List all threads in the attached process
+
+    Returns:
+        Formatted list of threads with ID, name, state, and stop reason
+    """
+    client = LLDBClient.get_instance()
+    threads = await client.list_threads()
+
+    if not threads:
+        return "No threads available"
+
+    output = f"{len(threads)} thread(s):\n"
+    for t in threads:
+        selected = " *" if t.get("is_selected") else "  "
+        output += f"\n{selected} Thread {t['id']}: {t.get('name', 'unnamed')}"
+        output += f" ({t.get('state', 'unknown')})"
+        if t.get("stop_reason"):
+            output += f"\n      Stop reason: {t['stop_reason']}"
+    return output

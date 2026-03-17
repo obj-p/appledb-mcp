@@ -2,6 +2,7 @@
 
 This module provides the entry point for running the LLDB service as a subprocess.
 Run with: python -m lldb_service
+       or: python -m lldb_service --tcp [--port PORT]
 """
 
 import asyncio
@@ -29,21 +30,27 @@ from .handlers import (
     handle_attach_process,
     handle_cleanup,
     handle_continue_execution,
+    handle_delete_breakpoint,
     handle_detach,
     handle_evaluate_expression,
+    handle_execute_command,
     handle_get_backtrace,
     handle_get_debugger_state,
     handle_get_variables,
     handle_initialize,
     handle_launch_app,
+    handle_list_breakpoints,
+    handle_list_threads,
     handle_load_framework,
     handle_pause,
     handle_ping,
+    handle_set_breakpoint,
     handle_step_into,
     handle_step_out,
     handle_step_over,
 )
 from .server import JSONRPCServer
+from .tcp_server import DEFAULT_PORT
 
 logger = logging.getLogger(__name__)
 
@@ -62,10 +69,23 @@ async def main() -> None:
     logger.info("LLDB Service starting")
     logger.info(f"Python version: {sys.version}")
 
-    # Create server
-    server = JSONRPCServer()
+    # Parse mode arguments
+    tcp_mode = "--tcp" in sys.argv
+    port = DEFAULT_PORT
+    for i, arg in enumerate(sys.argv):
+        if arg == "--port" and i + 1 < len(sys.argv):
+            port = int(sys.argv[i + 1])
 
-    # Register all 16 handlers
+    # Create server based on mode
+    if tcp_mode:
+        from .tcp_server import TCPJSONRPCServer
+        server = TCPJSONRPCServer(port=port)
+        logger.info(f"Running in TCP server mode on port {port}")
+    else:
+        server = JSONRPCServer()
+        logger.info("Running in subprocess (stdio) mode")
+
+    # Register all 21 handlers
     server.register_handler("ping", handle_ping)
     server.register_handler("initialize", handle_initialize)
     server.register_handler("attach_process", handle_attach_process)
@@ -82,8 +102,13 @@ async def main() -> None:
     server.register_handler("load_framework", handle_load_framework)
     server.register_handler("get_debugger_state", handle_get_debugger_state)
     server.register_handler("cleanup", handle_cleanup)
+    server.register_handler("execute_command", handle_execute_command)
+    server.register_handler("set_breakpoint", handle_set_breakpoint)
+    server.register_handler("list_breakpoints", handle_list_breakpoints)
+    server.register_handler("delete_breakpoint", handle_delete_breakpoint)
+    server.register_handler("list_threads", handle_list_threads)
 
-    logger.info("Registered 16 RPC handlers")
+    logger.info("Registered 21 RPC handlers")
 
     # Setup signal handlers for graceful shutdown
     def handle_shutdown(signum):
@@ -108,12 +133,13 @@ async def main() -> None:
 
     logger.info("Signal handlers registered")
 
-    # Send ready signal
-    ready_signal = {"jsonrpc": "2.0", "method": "ready", "params": {}}
-    print(json.dumps(ready_signal), flush=True)
-    logger.info("Ready signal sent")
+    if not tcp_mode:
+        # Send ready signal (subprocess mode only)
+        ready_signal = {"jsonrpc": "2.0", "method": "ready", "params": {}}
+        print(json.dumps(ready_signal), flush=True)
+        logger.info("Ready signal sent")
 
-    # Run server with single event loop
+    # Run server
     await server.run()
 
     logger.info("LLDB Service stopped")

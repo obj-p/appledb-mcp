@@ -50,3 +50,36 @@ Thumbs.db
 frameworks/*.framework
 !frameworks/.gitkeep
 *.log
+
+# Test files and binaries (keep in local dev only)
+test_debug_program
+test_debug_program.c
+test_debug_program.dSYM/
+test_attach.py
+test_integration.py
+test_lldb_breakpoint.py
+test_lldb_focused.py
+test_manual.py
+
+# Development scripts (keep in local dev only)
+cleanup.sh
+setup_lldb_symlink.sh
+run_appledb_mcp.sh
+
+# Obsolete/temporary documentation
+DEVELOPMENT_SETUP.md
+QUICK_SETUP.md
+TEST_RESULTS.md
+LLDB_SERVICE_TEST_REPORT.md
+LLDB_SERVICE_ARCHITECTURE.md
+PHASE*_SUMMARY.md
+PHASE*_IMPLEMENTATION_CHECKLIST.md
+CRITICAL_BUGS_FIXED.md
+CHAI_VALIDATION_REPORT.md
+
+# One-time validation/verification scripts
+validate_with_chai.py
+verify_phase6.py
+
+# Server state
+.appledb/

@@ -1,32 +1,43 @@
-"""Tests for LLDBDebuggerManager helper methods"""
+"""Tests for LLDBDebuggerManager helper methods
+
+These test the helper methods on the LLDB service's debugger manager.
+Since these methods use the lldb module directly, we mock it at the module level.
+"""
 
 import pytest
 from unittest.mock import MagicMock, patch
 
-from appledb_mcp.debugger import LLDBDebuggerManager
-
 
 @pytest.fixture
 def debugger_manager():
-    """Mock debugger manager with basic setup"""
-    with patch("appledb_mcp.debugger.lldb") as mock_lldb:
-        manager = LLDBDebuggerManager.get_instance()
+    """Create a debugger manager with mocked LLDB"""
+    with patch("lldb_service.debugger.lldb") as mock_lldb:
+        with patch("lldb_service.debugger.check_lldb_available", return_value=True):
+            from lldb_service.debugger import LLDBDebuggerManager
 
-        # Mock debugger
-        mock_debugger = MagicMock()
-        mock_debugger.IsValid.return_value = True
-        manager._debugger = mock_debugger
+            # Reset singleton
+            LLDBDebuggerManager._instance = None
 
-        # Mock process and target
-        mock_target = MagicMock()
-        mock_target.IsValid.return_value = True
-        mock_debugger.GetSelectedTarget.return_value = mock_target
+            manager = LLDBDebuggerManager.get_instance()
 
-        mock_process = MagicMock()
-        mock_process.IsValid.return_value = True
-        mock_target.GetProcess.return_value = mock_process
+            # Mock debugger
+            mock_debugger = MagicMock()
+            mock_debugger.IsValid.return_value = True
+            manager._debugger = mock_debugger
 
-        yield manager
+            # Mock process and target
+            mock_target = MagicMock()
+            mock_target.IsValid.return_value = True
+            mock_debugger.GetSelectedTarget.return_value = mock_target
+
+            mock_process = MagicMock()
+            mock_process.IsValid.return_value = True
+            mock_target.GetProcess.return_value = mock_process
+
+            yield manager
+
+            # Reset singleton after test
+            LLDBDebuggerManager._instance = None
 
 
 class TestGetFrameLocation:
@@ -39,7 +50,6 @@ class TestGetFrameLocation:
         frame.IsValid.return_value = True
         frame.GetFunctionName.return_value = "test_func"
 
-        # Mock line entry
         line_entry = MagicMock()
         line_entry.IsValid.return_value = True
         line_entry.GetLine.return_value = 42
@@ -52,7 +62,6 @@ class TestGetFrameLocation:
         thread.GetFrameAtIndex.return_value = frame
 
         result = debugger_manager._get_frame_location(thread)
-
         assert result == "Location: test_func at test.c:42"
 
     def test_get_frame_location_with_invalid_frame(self, debugger_manager):
@@ -63,7 +72,6 @@ class TestGetFrameLocation:
         thread.GetFrameAtIndex.return_value = frame
 
         result = debugger_manager._get_frame_location(thread)
-
         assert result == "Location: <unknown>"
 
     def test_get_frame_location_without_line_entry(self, debugger_manager):
@@ -74,7 +82,6 @@ class TestGetFrameLocation:
         frame.GetFunctionName.return_value = "test_func"
         frame.GetPC.return_value = 0x100001234
 
-        # Invalid line entry
         line_entry = MagicMock()
         line_entry.IsValid.return_value = False
         frame.GetLineEntry.return_value = line_entry
@@ -82,7 +89,6 @@ class TestGetFrameLocation:
         thread.GetFrameAtIndex.return_value = frame
 
         result = debugger_manager._get_frame_location(thread)
-
         assert result == "Location: test_func at 0x100001234"
 
     def test_get_frame_location_with_unknown_function(self, debugger_manager):
@@ -104,7 +110,6 @@ class TestGetFrameLocation:
         thread.GetFrameAtIndex.return_value = frame
 
         result = debugger_manager._get_frame_location(thread)
-
         assert result == "Location: <unknown> at file.c:10"
 
 

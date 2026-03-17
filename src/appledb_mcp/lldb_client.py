@@ -876,3 +876,51 @@ class LLDBClient:
             "attached": state.attached,
             "state": state.state,
         }
+
+    async def execute_command(self, command: str) -> dict:
+        """Execute arbitrary LLDB command.
+
+        Args:
+            command: LLDB command string (e.g., "bt", "register read")
+
+        Returns:
+            Dict with output, error, and success keys
+        """
+        return await self._call("execute_command", {"command": command})
+
+    async def set_breakpoint(
+        self,
+        file: Optional[str] = None,
+        line: Optional[int] = None,
+        symbol: Optional[str] = None,
+        module: Optional[str] = None,
+        condition: Optional[str] = None,
+    ) -> dict:
+        """Set a breakpoint."""
+        params = {}
+        if file is not None:
+            params["file"] = file
+        if line is not None:
+            params["line"] = line
+        if symbol is not None:
+            params["symbol"] = symbol
+        if module is not None:
+            params["module"] = module
+        if condition is not None:
+            params["condition"] = condition
+        return await self._call("set_breakpoint", params)
+
+    async def list_breakpoints(self) -> List[dict]:
+        """List all breakpoints."""
+        result = await self._call("list_breakpoints", {})
+        return result.get("breakpoints", [])
+
+    async def delete_breakpoint(self, breakpoint_id: int) -> bool:
+        """Delete a breakpoint by ID."""
+        await self._call("delete_breakpoint", {"breakpoint_id": breakpoint_id})
+        return True
+
+    async def list_threads(self) -> List[dict]:
+        """List all threads in the attached process."""
+        result = await self._call("list_threads", {})
+        return result.get("threads", [])

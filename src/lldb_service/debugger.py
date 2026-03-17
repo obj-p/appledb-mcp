@@ -6,7 +6,7 @@ import os
 from enum import Enum
 from typing import Dict, List, Optional
 
-from .models import DebuggerState, ProcessInfo, TargetInfo, ThreadInfo
+from .models import BreakpointInfo, DebuggerState, ProcessInfo, TargetInfo, ThreadInfo
 from .utils.errors import InvalidStateError, LLDBError, ProcessNotAttachedError
 from .utils.framework_resolver import resolve_framework_path
 from .utils.lldb_helpers import check_lldb_available, get_lldb_path, run_lldb_operation
@@ -984,6 +984,109 @@ class LLDBDebuggerManager:
                 threads=threads,
                 loaded_frameworks=frameworks,
             )
+
+    async def execute_command(self, command: str) -> dict:
+        """Execute arbitrary LLDB command via SBCommandInterpreter.
+
+        Does NOT require process attachment - many commands work without a target.
+        """
+        async with self._lock:
+            debugger = self.get_debugger()
+            ci = debugger.GetCommandInterpreter()
+            result = lldb.SBCommandReturnObject()
+            ci.HandleCommand(command, result)
+            return {
+                "output": result.GetOutput() or "",
+                "error": result.GetError() or "",
+                "success": result.Succeeded(),
+            }
+
+    def _breakpoint_to_info(self, bp) -> BreakpointInfo:
+        """Convert SBBreakpoint to BreakpointInfo."""
+        # Try to get file/line from first location
+        file_name = None
+        line_number = None
+        if bp.GetNumLocations() > 0:
+            loc = bp.GetLocationAtIndex(0)
+            addr = loc.GetAddress()
+            line_entry = addr.GetLineEntry()
+            if line_entry.IsValid():
+                fs = line_entry.GetFileSpec()
+                if fs.IsValid():
+                    file_name = fs.GetFilename()
+                line_number = line_entry.GetLine()
+
+        return BreakpointInfo(
+            id=bp.GetID(),
+            locations=bp.GetNumLocations(),
+            enabled=bp.IsEnabled(),
+            hit_count=bp.GetHitCount(),
+            condition=bp.GetCondition() or None,
+            file=file_name,
+            line=line_number,
+            symbol=None,  # LLDB doesn't store the original symbol name on SBBreakpoint easily
+        )
+
+    async def set_breakpoint(
+        self,
+        file: Optional[str] = None,
+        line: Optional[int] = None,
+        symbol: Optional[str] = None,
+        module: Optional[str] = None,
+        condition: Optional[str] = None,
+    ) -> BreakpointInfo:
+        """Set a breakpoint by file:line or symbol name."""
+        async with self._lock:
+            if not self.is_attached():
+                raise ProcessNotAttachedError("No process attached")
+            target = self.get_target()
+
+            if file and line is not None:
+                bp = target.BreakpointCreateByLocation(file, line)
+            elif symbol:
+                bp = target.BreakpointCreateByName(symbol)
+            else:
+                raise ValueError("Must specify file+line or symbol")
+
+            if not bp.IsValid():
+                raise LLDBError("Failed to create breakpoint")
+
+            if condition:
+                bp.SetCondition(condition)
+
+            info = self._breakpoint_to_info(bp)
+            if symbol:
+                info.symbol = symbol
+
+            logger.info(f"Set breakpoint {bp.GetID()}")
+            return info
+
+    async def list_breakpoints(self) -> List[BreakpointInfo]:
+        """List all breakpoints."""
+        async with self._lock:
+            if not self.is_attached():
+                raise ProcessNotAttachedError("No process attached")
+            target = self.get_target()
+
+            breakpoints = []
+            for i in range(target.GetNumBreakpoints()):
+                bp = target.GetBreakpointAtIndex(i)
+                if bp.IsValid():
+                    breakpoints.append(self._breakpoint_to_info(bp))
+            return breakpoints
+
+    async def delete_breakpoint(self, breakpoint_id: int) -> bool:
+        """Delete a breakpoint by ID."""
+        async with self._lock:
+            if not self.is_attached():
+                raise ProcessNotAttachedError("No process attached")
+            target = self.get_target()
+
+            success = target.BreakpointDelete(breakpoint_id)
+            if not success:
+                raise LLDBError(f"Failed to delete breakpoint {breakpoint_id}")
+            logger.info(f"Deleted breakpoint {breakpoint_id}")
+            return True
 
     async def cleanup(self) -> None:
         """Clean up debugger resources

@@ -4,6 +4,16 @@ from unittest.mock import MagicMock, Mock
 
 import pytest
 
+from appledb_mcp.lldb_client import LLDBClient
+
+
+@pytest.fixture
+def reset_client_singleton():
+    """Reset LLDBClient singleton between tests"""
+    LLDBClient._instance = None
+    yield
+    LLDBClient._instance = None
+
 
 @pytest.fixture
 def mock_lldb_debugger():

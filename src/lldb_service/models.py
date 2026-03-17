@@ -60,6 +60,19 @@ class TargetInfo(BaseModel):
     executable: Optional[str] = Field(None, description="Path to executable being debugged")
 
 
+class BreakpointInfo(BaseModel):
+    """Information about a breakpoint"""
+
+    id: int = Field(..., description="Breakpoint ID")
+    locations: int = Field(default=0, description="Number of resolved locations")
+    enabled: bool = Field(default=True, description="Whether breakpoint is enabled")
+    hit_count: int = Field(default=0, description="Number of times hit")
+    condition: Optional[str] = Field(None, description="Breakpoint condition expression")
+    file: Optional[str] = Field(None, description="Source file (if set by location)")
+    line: Optional[int] = Field(None, description="Line number (if set by location)")
+    symbol: Optional[str] = Field(None, description="Symbol name (if set by name)")
+
+
 class DebuggerState(BaseModel):
     """Complete debugger state snapshot"""
 
