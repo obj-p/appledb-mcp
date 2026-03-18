@@ -591,10 +591,35 @@ def bp_delete(ctx, breakpoint_id):
 
 # ── Heap introspection subgroup ──────────────────────────────────
 
+def _ensure_runtime_built() -> str:
+    """Ensure AppleDBRuntime framework is built, return absolute path."""
+    project_root = Path(__file__).parent.parent.parent
+    framework_path = project_root / "frameworks" / "AppleDBRuntime.framework" / "AppleDBRuntime"
+
+    if not framework_path.exists():
+        build_script = project_root / "AppleDBRuntime" / "build.sh"
+        if not build_script.exists():
+            raise click.ClickException(
+                f"AppleDBRuntime build script not found at {build_script}. "
+                "Clone the full repo or run from the project directory."
+            )
+        click.echo("Building AppleDBRuntime framework...", err=True)
+        result = subprocess.run(
+            ["bash", str(build_script)],
+            capture_output=True, text=True, timeout=120
+        )
+        if result.returncode != 0:
+            raise click.ClickException(f"Failed to build AppleDBRuntime: {result.stderr}")
+        click.echo("AppleDBRuntime built successfully", err=True)
+
+    return str(framework_path)
+
+
 def _heap_eval(port: int, expression: str) -> Any:
     """Load AppleDBRuntime and evaluate an expression, returning parsed JSON."""
-    # Ensure framework is loaded (idempotent)
-    _run(port, "load_framework", {"framework_name": "AppleDBRuntime"})
+    # Build if needed and load with absolute path
+    framework_path = _ensure_runtime_built()
+    _run(port, "load_framework", {"framework_path": framework_path})
     # Evaluate expression with long timeout for heap walking
     result = _run(port, "evaluate_expression", {
         "expression": expression,

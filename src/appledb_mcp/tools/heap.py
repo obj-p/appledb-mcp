@@ -25,9 +25,9 @@ _BUILD_SCRIPT = Path(__file__).parent.parent.parent.parent / "AppleDBRuntime" / 
 
 async def _ensure_runtime(client: LLDBClient) -> None:
     """Ensure AppleDBRuntime framework is loaded. Auto-builds if missing."""
-    framework_path = _FRAMEWORK_DIR / "AppleDBRuntime.framework" / "AppleDBRuntime"
+    framework_binary = _FRAMEWORK_DIR / "AppleDBRuntime.framework" / "AppleDBRuntime"
 
-    if not framework_path.exists():
+    if not framework_binary.exists():
         logger.info("AppleDBRuntime not found, building...")
         if not _BUILD_SCRIPT.exists():
             raise RuntimeError(
@@ -42,7 +42,8 @@ async def _ensure_runtime(client: LLDBClient) -> None:
             raise RuntimeError(f"Failed to build AppleDBRuntime: {result.stderr}")
         logger.info("AppleDBRuntime built successfully")
 
-    await client.load_framework(framework_name="AppleDBRuntime")
+    # Pass absolute path so the LLDB service doesn't need to resolve it
+    await client.load_framework(framework_path=str(framework_binary))
 
 
 async def _eval_runtime(client: LLDBClient, expression: str) -> list | dict:
