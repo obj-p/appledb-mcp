@@ -133,8 +133,13 @@ async def main() -> None:
 
     logger.info("Signal handlers registered")
 
-    if not tcp_mode:
-        # Send ready signal (subprocess mode only)
+    if tcp_mode:
+        # TCP mode: initialize debugger immediately (no client will send initialize RPC)
+        manager = LLDBDebuggerManager.get_instance()
+        manager.initialize({"log_level": "INFO"})
+        logger.info("LLDB debugger initialized for TCP mode")
+    else:
+        # Subprocess mode: send ready signal (MCP client will send initialize RPC)
         ready_signal = {"jsonrpc": "2.0", "method": "ready", "params": {}}
         print(json.dumps(ready_signal), flush=True)
         logger.info("Ready signal sent")
