@@ -1,88 +1,119 @@
-"""Pydantic models for data validation and responses"""
+"""Data models for the LLDB service.
 
-from typing import Optional
+Uses stdlib dataclasses instead of pydantic so the LLDB service can run
+on system Python (3.9) without any third-party dependencies.
+"""
 
-from pydantic import BaseModel, Field
+from dataclasses import dataclass, field, asdict
+from typing import List, Optional
 
 
-class ProcessInfo(BaseModel):
+@dataclass
+class ProcessInfo:
     """Information about an attached process"""
+    pid: int
+    name: str
+    state: str
+    architecture: str
 
-    pid: int = Field(..., description="Process ID")
-    name: str = Field(..., description="Process name")
-    state: str = Field(..., description="Process state (stopped, running, etc.)")
-    architecture: str = Field(..., description="Process architecture (e.g., arm64, x86_64)")
+    def model_dump(self) -> dict:
+        return asdict(self)
 
 
-class ThreadInfo(BaseModel):
+@dataclass
+class ThreadInfo:
     """Information about a thread"""
+    id: int
+    state: str
+    name: str = ""
+    stop_reason: Optional[str] = None
+    is_selected: bool = False
 
-    id: int = Field(..., description="Thread ID")
-    name: str = Field(default="", description="Thread name")
-    state: str = Field(..., description="Thread state")
-    stop_reason: Optional[str] = Field(None, description="Reason thread stopped")
-    is_selected: bool = Field(default=False, description="Whether this is the selected thread")
+    def model_dump(self) -> dict:
+        return asdict(self)
 
 
-class FrameInfo(BaseModel):
+@dataclass
+class FrameInfo:
     """Information about a stack frame"""
+    index: int
+    pc: str
+    function: str
+    module: str
+    file: Optional[str] = None
+    line: Optional[int] = None
 
-    index: int = Field(..., description="Frame index (0 = current)")
-    pc: str = Field(..., description="Program counter (address)")
-    function: str = Field(..., description="Function name")
-    file: Optional[str] = Field(None, description="Source file path")
-    line: Optional[int] = Field(None, description="Line number in source file")
-    module: str = Field(..., description="Module/library name")
+    def model_dump(self) -> dict:
+        return asdict(self)
 
 
-class VariableInfo(BaseModel):
+@dataclass
+class VariableInfo:
     """Information about a variable"""
+    name: str
+    type: str
+    value: str
+    summary: str = ""
 
-    name: str = Field(..., description="Variable name")
-    type: str = Field(..., description="Variable type")
-    value: str = Field(..., description="Variable value as string")
-    summary: str = Field(default="", description="Variable summary/description")
+    def model_dump(self) -> dict:
+        return asdict(self)
 
 
-class EvaluationResult(BaseModel):
+@dataclass
+class EvaluationResult:
     """Result of expression evaluation"""
+    value: str
+    type: str
+    summary: str = ""
+    error: Optional[str] = None
 
-    value: str = Field(..., description="Result value as string")
-    type: str = Field(..., description="Result type")
-    summary: str = Field(default="", description="Result summary")
-    error: Optional[str] = Field(None, description="Error message if evaluation failed")
+    def model_dump(self) -> dict:
+        return asdict(self)
 
 
-class TargetInfo(BaseModel):
+@dataclass
+class TargetInfo:
     """Information about the debug target"""
+    triple: str
+    executable: Optional[str] = None
 
-    triple: str = Field(..., description="Target triple (e.g., arm64-apple-macosx)")
-    executable: Optional[str] = Field(None, description="Path to executable being debugged")
+    def model_dump(self) -> dict:
+        return asdict(self)
 
 
-class BreakpointInfo(BaseModel):
+@dataclass
+class BreakpointInfo:
     """Information about a breakpoint"""
+    id: int
+    locations: int = 0
+    enabled: bool = True
+    hit_count: int = 0
+    condition: Optional[str] = None
+    file: Optional[str] = None
+    line: Optional[int] = None
+    symbol: Optional[str] = None
 
-    id: int = Field(..., description="Breakpoint ID")
-    locations: int = Field(default=0, description="Number of resolved locations")
-    enabled: bool = Field(default=True, description="Whether breakpoint is enabled")
-    hit_count: int = Field(default=0, description="Number of times hit")
-    condition: Optional[str] = Field(None, description="Breakpoint condition expression")
-    file: Optional[str] = Field(None, description="Source file (if set by location)")
-    line: Optional[int] = Field(None, description="Line number (if set by location)")
-    symbol: Optional[str] = Field(None, description="Symbol name (if set by name)")
+    def model_dump(self) -> dict:
+        return asdict(self)
 
 
-class DebuggerState(BaseModel):
+@dataclass
+class DebuggerState:
     """Complete debugger state snapshot"""
+    attached: bool
+    state: str
+    process: Optional[ProcessInfo] = None
+    target: Optional[TargetInfo] = None
+    threads: List[ThreadInfo] = field(default_factory=list)
+    loaded_frameworks: List[str] = field(default_factory=list)
 
-    attached: bool = Field(..., description="Whether debugger is attached to a process")
-    state: str = Field(..., description="Process state (detached, stopped, running)")
-    process: Optional[ProcessInfo] = Field(None, description="Process information if attached")
-    target: Optional[TargetInfo] = Field(None, description="Target information if attached")
-    threads: list = Field(
-        default_factory=list, description="List of threads in process"
-    )
-    loaded_frameworks: list = Field(
-        default_factory=list, description="List of loaded framework paths"
-    )
+    def model_dump(self) -> dict:
+        d = {
+            "attached": self.attached,
+            "state": self.state,
+            "process": self.process.model_dump() if self.process else None,
+            "target": self.target.model_dump() if self.target else None,
+            "threads": [t.model_dump() for t in self.threads],
+            "loaded_frameworks": self.loaded_frameworks,
+        }
+        return d
