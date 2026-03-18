@@ -745,6 +745,7 @@ class LLDBClient:
         language: Optional[str] = None,
         frame_index: int = 0,
         thread_id: Optional[int] = None,
+        timeout: Optional[float] = None,
     ) -> dict:
         """Evaluate expression in context
 
@@ -753,6 +754,8 @@ class LLDBClient:
             language: Optional language hint ("swift", "objc", "c++", "c")
             frame_index: Stack frame index
             thread_id: Optional thread ID
+            timeout: Optional timeout override (seconds). Useful for long-running
+                     operations like heap introspection.
 
         Returns:
             Evaluation result dictionary
@@ -768,7 +771,7 @@ class LLDBClient:
             params["language"] = language
         if thread_id is not None:
             params["thread_id"] = thread_id
-        result = await self._call("evaluate_expression", params)
+        result = await self._call("evaluate_expression", params, timeout=timeout)
         return result
 
     async def get_backtrace(

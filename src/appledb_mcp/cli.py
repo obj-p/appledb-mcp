@@ -541,3 +541,159 @@ def bp_delete(ctx, breakpoint_id):
         click.echo(f"Breakpoint {breakpoint_id} deleted")
     except Exception as e:
         raise click.ClickException(str(e))
+
+
+# ── Heap introspection subgroup ──────────────────────────────────
+
+def _heap_eval(port: int, expression: str) -> Any:
+    """Load AppleDBRuntime and evaluate an expression, returning parsed JSON."""
+    # Ensure framework is loaded (idempotent)
+    _run(port, "load_framework", {"framework_name": "AppleDBRuntime"})
+    # Evaluate expression with long timeout for heap walking
+    result = _run(port, "evaluate_expression", {
+        "expression": expression,
+        "language": "objc",
+    })
+    summary = (result or {}).get("summary", "") or ""
+    if summary.startswith('"') and summary.endswith('"'):
+        summary = summary[1:-1]
+    summary = summary.replace('\\"', '"').replace('\\\\', '\\')
+    if not summary:
+        return []
+    import json as _json
+    return _json.loads(summary)
+
+
+@main.group()
+def heap():
+    """Heap introspection (requires AppleDBRuntime framework)"""
+    pass
+
+
+@heap.command("summary")
+@click.option("--limit", type=int, default=50, help="Max classes to show")
+@click.pass_context
+def heap_summary(ctx, limit):
+    """Show heap class histogram"""
+    port = ctx.parent.parent.obj["port"]
+    _ensure_server(port)
+
+    try:
+        data = _heap_eval(port, "[AppleDBRuntime heapSummary]")
+        if not data:
+            click.echo("No heap objects found")
+            return
+        entries = data[:limit] if isinstance(data, list) else []
+        click.echo(f"{'Class':<50} {'Count':>8} {'Size':>12}")
+        click.echo("-" * 72)
+        for entry in entries:
+            cls = entry.get("class", "?")
+            count = entry.get("count", 0)
+            size = entry.get("totalSize", 0)
+            if size >= 1_048_576:
+                s = f"{size / 1_048_576:.1f} MB"
+            elif size >= 1024:
+                s = f"{size / 1024:.1f} KB"
+            else:
+                s = f"{size} B"
+            click.echo(f"{cls:<50} {count:>8} {s:>12}")
+    except Exception as e:
+        raise click.ClickException(str(e))
+
+
+@heap.command("instances")
+@click.argument("class_name")
+@click.pass_context
+def heap_instances(ctx, class_name):
+    """Find all instances of a class on the heap"""
+    port = ctx.parent.parent.obj["port"]
+    _ensure_server(port)
+
+    try:
+        data = _heap_eval(port, f'[AppleDBRuntime instancesOf:@"{class_name}"]')
+        if not data:
+            click.echo(f"No instances of '{class_name}' found")
+            return
+        click.echo(f"{len(data)} instance(s) of '{class_name}':")
+        for entry in data:
+            click.echo(f"  {entry.get('address', '?')}  ({entry.get('size', 0)} bytes)")
+    except Exception as e:
+        raise click.ClickException(str(e))
+
+
+@heap.command("describe")
+@click.argument("address")
+@click.pass_context
+def heap_describe(ctx, address):
+    """Describe an object at a memory address"""
+    port = ctx.parent.parent.obj["port"]
+    _ensure_server(port)
+
+    try:
+        addr_int = int(address, 16) if address.startswith("0x") else int(address)
+        data = _heap_eval(port, f"[AppleDBRuntime describeAddress:{addr_int}]")
+        if isinstance(data, dict) and "error" in data:
+            click.echo(f"Error: {data['error']}")
+            return
+        click.echo(f"Object at {data.get('address', address)}")
+        click.echo(f"  Class: {data.get('class', '?')} ({data.get('size', 0)} bytes)")
+        supers = data.get("superclasses", [])
+        if supers:
+            click.echo(f"  Inherits: {' > '.join(supers)}")
+        ivars = data.get("ivarValues", data.get("ivars", []))
+        if ivars:
+            click.echo(f"\n  Ivars ({len(ivars)}):")
+            for iv in ivars:
+                if "class" in iv:
+                    click.echo(f"    .{iv.get('name','?')}: {iv['class']} @ {iv.get('address','?')}")
+                elif "value" in iv:
+                    click.echo(f"    .{iv.get('name','?')}: {iv['value']}")
+    except Exception as e:
+        raise click.ClickException(str(e))
+
+
+@heap.command("refs")
+@click.argument("address")
+@click.pass_context
+def heap_refs(ctx, address):
+    """Show outbound references from an object"""
+    port = ctx.parent.parent.obj["port"]
+    _ensure_server(port)
+
+    try:
+        addr_int = int(address, 16) if address.startswith("0x") else int(address)
+        data = _heap_eval(port, f"[AppleDBRuntime referencesFrom:{addr_int}]")
+        if not data:
+            click.echo("No outbound references")
+            return
+        click.echo(f"{len(data)} reference(s):")
+        for ref in data:
+            click.echo(f"  .{ref.get('ivar','?')} -> {ref.get('class','?')} @ {ref.get('address','?')}")
+    except Exception as e:
+        raise click.ClickException(str(e))
+
+
+@heap.command("cycles")
+@click.argument("address")
+@click.option("--max-depth", type=int, default=10, help="Max search depth")
+@click.pass_context
+def heap_cycles(ctx, address, max_depth):
+    """Detect retain cycles from an object"""
+    port = ctx.parent.parent.obj["port"]
+    _ensure_server(port)
+
+    try:
+        addr_int = int(address, 16) if address.startswith("0x") else int(address)
+        data = _heap_eval(port, f"[AppleDBRuntime retainCyclesFrom:{addr_int} maxDepth:{max_depth}]")
+        if not data:
+            click.echo("No retain cycles detected")
+            return
+        click.echo(f"{len(data)} retain cycle(s) found:")
+        for i, cycle in enumerate(data, 1):
+            nodes = cycle.get("cycle", [])
+            click.echo(f"\n  Cycle {i}:")
+            for j, node in enumerate(nodes):
+                prefix = "  -> " if j > 0 else "  "
+                click.echo(f"    {prefix}{node}")
+    except Exception as e:
+        raise click.ClickException(str(e))
