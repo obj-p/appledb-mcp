@@ -67,13 +67,59 @@ def _get_server_pid() -> Optional[int]:
     return None
 
 
+def _find_lldb_python() -> str:
+    """Find a Python interpreter that can import LLDB.
+
+    Discovery order:
+    1. APPLEDB_LLDB_PYTHON env var
+    2. /usr/bin/python3 (macOS system Python, usually has LLDB)
+    3. python3 on PATH with lldb -P PYTHONPATH
+    """
+    # 1. Explicit env var
+    explicit = os.environ.get("APPLEDB_LLDB_PYTHON")
+    if explicit:
+        return explicit
+
+    # 2. Get LLDB Python path for testing candidates
+    lldb_python_path = None
+    try:
+        result = subprocess.run(
+            ["lldb", "-P"], capture_output=True, text=True, timeout=5
+        )
+        if result.returncode == 0:
+            lldb_python_path = result.stdout.strip()
+    except Exception:
+        pass
+
+    # 3. Try common system Python paths
+    for candidate in ["/usr/bin/python3", "python3.9", "python3"]:
+        import shutil
+        path = candidate if candidate.startswith("/") else shutil.which(candidate)
+        if not path or not os.path.exists(path):
+            continue
+        try:
+            env = os.environ.copy()
+            if lldb_python_path:
+                env["PYTHONPATH"] = lldb_python_path
+            result = subprocess.run(
+                [path, "-c", "import lldb"],
+                capture_output=True, text=True, timeout=5, env=env
+            )
+            if result.returncode == 0:
+                return path
+        except Exception:
+            continue
+
+    # Fall back to system python3
+    return "/usr/bin/python3"
+
+
 def _start_server_background(port: int) -> None:
     """Start LLDB server as background process."""
-    # Find python for lldb_service (needs Python 3.9+ with LLDB bindings)
-    python_path = os.environ.get("APPLEDB_LLDB_PYTHON", "python3")
+    python_path = _find_lldb_python()
     src_path = str(Path(__file__).parent.parent)
 
-    # Get LLDB Python path
+    # Set up PYTHONPATH with LLDB bindings
     env = os.environ.copy()
     try:
         result = subprocess.run(

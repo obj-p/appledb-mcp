@@ -135,57 +135,126 @@ class LLDBClient:
         }
 
     def _find_python_path(self, config: AppleDBConfig) -> str:
-        """Find Python 3.9+ interpreter
+        """Find Python 3.9+ interpreter that can import LLDB.
 
-        Args:
-            config: Configuration object
+        Discovery order:
+        1. APPLEDB_LLDB_PYTHON env var / config
+        2. Query `lldb -P` to find LLDB's Python, then find a matching interpreter
+        3. Try common macOS system Python paths
+        4. Fall back to python3.9 / python3 on PATH
 
         Returns:
-            Path to Python 3.9+ interpreter
+            Path to Python interpreter that can load LLDB
 
         Raises:
             RuntimeError: If no suitable Python found
         """
-        # 1. Use explicit config if set
+        # 1. Explicit config override
         if config.lldb_python != "python3":
             python_path = config.lldb_python
-            if not self._check_python_version(python_path):
-                raise RuntimeError(
-                    f"Python at {python_path} is not version 3.9+"
+            if self._can_import_lldb(python_path):
+                return python_path
+            if self._check_python_version(python_path):
+                logger.warning(
+                    f"{python_path} can't import lldb, but using it anyway "
+                    "(PYTHONPATH will be set from 'lldb -P')"
                 )
-            return python_path
+                return python_path
+            raise RuntimeError(f"Python at {python_path} is not version 3.9+")
 
-        # 2. Try python3.9
-        if shutil.which("python3.9"):
-            return "python3.9"
+        # 2. Query lldb for its Python path and find a matching interpreter
+        lldb_python = self._find_lldb_python()
+        if lldb_python:
+            logger.info(f"Auto-discovered LLDB Python: {lldb_python}")
+            return lldb_python
 
-        # 3. Try python3 (check version >= 3.9)
-        python3 = shutil.which("python3")
-        if python3 and self._check_python_version(python3):
-            return python3
+        # 3. Try common macOS system Python paths
+        for candidate in [
+            "/usr/bin/python3",
+            "/usr/local/bin/python3",
+            "/Library/Developer/CommandLineTools/usr/bin/python3",
+        ]:
+            if os.path.exists(candidate) and self._can_import_lldb(candidate):
+                logger.info(f"Found LLDB-capable Python: {candidate}")
+                return candidate
+
+        # 4. Fall back to python3 on PATH (PYTHONPATH from lldb -P will help)
+        for name in ["python3.9", "python3"]:
+            path = shutil.which(name)
+            if path and self._check_python_version(path):
+                logger.info(f"Using {path} (will set PYTHONPATH from 'lldb -P')")
+                return path
 
         raise RuntimeError(
-            "No Python 3.9+ found. Install Python 3.9+ or set "
-            "APPLEDB_LLDB_PYTHON environment variable."
+            "No Python 3.9+ found. Install Xcode Command Line Tools "
+            "(xcode-select --install) or set APPLEDB_LLDB_PYTHON."
         )
 
-    def _check_python_version(self, python_path: str) -> bool:
-        """Check if Python version is >= 3.9
-
-        Args:
-            python_path: Path to Python interpreter
+    def _find_lldb_python(self) -> Optional[str]:
+        """Query lldb -P to find the Python interpreter LLDB was built with.
 
         Returns:
-            True if version >= 3.9, False otherwise
+            Path to Python interpreter, or None if not found
         """
         try:
             result = subprocess.run(
-                [python_path, "--version"],
-                capture_output=True,
-                text=True,
-                timeout=5,
+                ["lldb", "-P"], capture_output=True, text=True, timeout=5
             )
-            # Parse "Python 3.9.6" -> (3, 9, 6)
+            if result.returncode != 0:
+                return None
+
+            # lldb -P returns something like:
+            #   /Applications/Xcode.app/.../LLDB.framework/Resources/Python
+            # or /Library/Developer/CommandLineTools/...
+            lldb_python_path = result.stdout.strip()
+            if not lldb_python_path:
+                return None
+
+            # The Python that ships with LLDB is typically the system python3
+            # at the same prefix. Try to find it.
+            # e.g. .../LLDB.framework/Resources/Python -> look for python3 nearby
+            # But the most reliable approach: just test which python3 can import lldb
+            # when PYTHONPATH includes lldb_python_path
+            for candidate in ["/usr/bin/python3", shutil.which("python3")]:
+                if candidate and self._can_import_lldb(candidate, lldb_python_path):
+                    return candidate
+
+            return None
+        except Exception as e:
+            logger.debug(f"Could not query lldb -P: {e}")
+            return None
+
+    def _can_import_lldb(self, python_path: str, extra_pythonpath: Optional[str] = None) -> bool:
+        """Check if a Python interpreter can import the lldb module.
+
+        Args:
+            python_path: Path to Python interpreter
+            extra_pythonpath: Optional extra path to prepend to PYTHONPATH
+
+        Returns:
+            True if `import lldb` succeeds
+        """
+        try:
+            env = os.environ.copy()
+            if extra_pythonpath:
+                existing = env.get("PYTHONPATH", "")
+                env["PYTHONPATH"] = f"{extra_pythonpath}:{existing}" if existing else extra_pythonpath
+
+            result = subprocess.run(
+                [python_path, "-c", "import lldb"],
+                capture_output=True, text=True, timeout=5, env=env
+            )
+            return result.returncode == 0
+        except Exception:
+            return False
+
+    def _check_python_version(self, python_path: str) -> bool:
+        """Check if Python version is >= 3.9"""
+        try:
+            result = subprocess.run(
+                [python_path, "--version"],
+                capture_output=True, text=True, timeout=5,
+            )
             version_str = result.stdout.strip().split()[1]
             major, minor, *_ = map(int, version_str.split("."))
             return (major, minor) >= (3, 9)
