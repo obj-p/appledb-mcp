@@ -31,9 +31,9 @@ class AppleDBConfig(BaseSettings):
     )
 
     # Subprocess management
-    python_path: str = Field(
+    lldb_python: str = Field(
         default="python3",
-        description="Path to Python 3.9+ interpreter for LLDB service"
+        description="Path to Python 3.9+ interpreter with LLDB bindings"
     )
     service_max_restarts: int = Field(
         default=3,

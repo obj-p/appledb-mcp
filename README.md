@@ -139,7 +139,7 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 |----------|-------------|---------|
 | `APPLEDB_LOG_LEVEL` | Logging level (DEBUG, INFO, WARNING, ERROR) | `INFO` |
 | `APPLEDB_LLDB_TIMEOUT` | Timeout for LLDB operations (seconds) | `30` |
-| `APPLEDB_PYTHON_PATH` | Path to Python 3.9+ for LLDB service | `python3` |
+| `APPLEDB_LLDB_PYTHON` | Python 3.9+ interpreter with LLDB bindings | `python3` |
 | `APPLEDB_PORT` | TCP port for server | `5037` |
 | `APPLEDB_SERVICE_MAX_RESTARTS` | Max automatic subprocess restarts | `3` |
 | `APPLEDB_SERVICE_RESTART_BACKOFF` | Base restart backoff (seconds) | `1.0` |

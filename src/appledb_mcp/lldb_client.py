@@ -147,8 +147,8 @@ class LLDBClient:
             RuntimeError: If no suitable Python found
         """
         # 1. Use explicit config if set
-        if config.python_path != "python3":
-            python_path = config.python_path
+        if config.lldb_python != "python3":
+            python_path = config.lldb_python
             if not self._check_python_version(python_path):
                 raise RuntimeError(
                     f"Python at {python_path} is not version 3.9+"
@@ -166,7 +166,7 @@ class LLDBClient:
 
         raise RuntimeError(
             "No Python 3.9+ found. Install Python 3.9+ or set "
-            "APPLEDB_PYTHON_PATH environment variable."
+            "APPLEDB_LLDB_PYTHON environment variable."
         )
 
     def _check_python_version(self, python_path: str) -> bool:

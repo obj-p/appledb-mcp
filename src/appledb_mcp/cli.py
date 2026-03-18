@@ -70,7 +70,7 @@ def _get_server_pid() -> Optional[int]:
 def _start_server_background(port: int) -> None:
     """Start LLDB server as background process."""
     # Find python for lldb_service (needs Python 3.9+ with LLDB bindings)
-    python_path = os.environ.get("APPLEDB_PYTHON_PATH", "python3")
+    python_path = os.environ.get("APPLEDB_LLDB_PYTHON", "python3")
     src_path = str(Path(__file__).parent.parent)
 
     # Get LLDB Python path
