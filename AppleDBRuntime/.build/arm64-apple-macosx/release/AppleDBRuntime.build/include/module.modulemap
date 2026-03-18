@@ -1,3 +1,0 @@
-module AppleDBRuntime {
-    header "/Users/obj-p/Projects/appledb-mcp/AppleDBRuntime/.build/arm64-apple-macosx/release/AppleDBRuntime.build/include/AppleDBRuntime-Swift.h"
-}

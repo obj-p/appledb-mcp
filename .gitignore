@@ -81,5 +81,8 @@ CHAI_VALIDATION_REPORT.md
 validate_with_chai.py
 verify_phase6.py
 
+# Swift build artifacts
+AppleDBRuntime/.build/
+
 # Server state
 .appledb/
